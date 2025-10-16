@@ -192,10 +192,6 @@ function savePersistedState() {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Binder helpers                                                             */
-/* -------------------------------------------------------------------------- */
-
 function renderBinder() {
   if (!state.binder) return;
 
@@ -417,8 +413,6 @@ function handleCardClick(card, result) {
 
   state.binder[result.key] = (state.binder[result.key] || 0) + 1;
   state.pulled.push({ key: result.key, name: result.name });
-  savePersistedState();
-  renderBinder();
 
   if (!prefersReducedMotion) {
     card.style.transition = 'transform 0.42s cubic-bezier(.2,.8,.2,1), opacity 0.42s ease';
