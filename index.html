@@ -32,12 +32,13 @@
       <main class="pages" aria-live="polite">
         <section id="page-home" class="page active" aria-labelledby="title">
           <div class="panel hero">
-            <div class="hero-content">
-              <span class="hero-kicker">Collectible vibes</span>
-              <h2>Welcome to Cereal Box</h2>
-              <p>Pick a box. Odds vary by box.</p>
-              <button id="goBoxes" class="bigbtn" type="button">Enter Box Shelf →</button>
-            </div>
+            <button class="hero-box" type="button" data-box="standard">
+              <span aria-hidden="true" class="hero-box__edge hero-box__edge--left"></span>
+              <span aria-hidden="true" class="hero-box__edge hero-box__edge--right"></span>
+              <span class="hero-box__badge">Collectible vibes</span>
+              <span class="hero-box__title">Crack the Standard Box</span>
+              <span class="hero-box__meta">Jump straight to the break and start ripping packs.</span>
+            </button>
             <div class="hero-illustration" aria-hidden="true">
               <div class="hero-pack"></div>
               <div class="hero-card"></div>

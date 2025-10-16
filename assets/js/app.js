@@ -112,8 +112,10 @@ const elBinder = document.getElementById("binder");
 const btnPrimary = document.getElementById("btnPrimary");
 const btnAuto = document.getElementById("btnAuto");
 const boxesGrid = document.getElementById("boxesGrid");
-const goBoxes = document.getElementById("goBoxes");
+const heroBox = document.querySelector(".hero-box");
 const openedEl = document.getElementById("opened");
+
+let selectBox = () => {};
 
 /* -------------------------------------------------------------------------- */
 /* Persistence                                                                 */
@@ -248,6 +250,18 @@ function renderBinder() {
 
 function renderBoxes() {
   boxesGrid.innerHTML = "";
+
+  function selectBoxHelper(boxKey, options = {}) {
+    const { animate = true } = options;
+    setBox(boxKey);
+    if (animate) {
+      const card = boxesGrid.querySelector(`.boxCard[data-key="${boxKey}"]`);
+      if (card) {
+        animateBoxSelection(card);
+      }
+    }
+  }
+
   Object.values(BOXES).forEach((box) => {
     const card = document.createElement("button");
     card.className = "boxCard";
@@ -264,14 +278,16 @@ function renderBoxes() {
     `;
 
     card.addEventListener("click", () => {
-      setBox(box.key);
+      selectBoxHelper(box.key);
       activate("packs");
       spawnCenterBox();
-      animateBoxSelection(card);
     });
 
     boxesGrid.appendChild(card);
   });
+
+  renderBoxes.selectBox = selectBoxHelper;
+  return selectBoxHelper;
 }
 
 function animateBoxSelection(card) {
@@ -592,9 +608,14 @@ function wireNav() {
 }
 
 function wireControls() {
-  goBoxes.addEventListener("click", () => {
-    activate("boxes");
-  });
+  if (heroBox) {
+    heroBox.addEventListener("click", () => {
+      const targetKey = heroBox.dataset.box || (state.currentBox && state.currentBox.key) || "standard";
+      selectBox(targetKey, { animate: false });
+      activate("packs");
+      spawnCenterBox();
+    });
+  }
 
   btnPrimary.addEventListener("click", () => {
     if (elSummary.classList.contains("show")) {
@@ -633,7 +654,7 @@ function init() {
   state.opened = saved.opened;
   openedEl.textContent = state.opened;
   renderBinder();
-  renderBoxes();
+  selectBox = renderBoxes();
   wireNav();
   wireControls();
   ensurePacksTabEnabled();
