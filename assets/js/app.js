@@ -406,6 +406,33 @@ function renderBinder() {
 /* Boxes                                                                       */
 /* -------------------------------------------------------------------------- */
 
+function selectBoxHelper(key, { animate = false, focus = false, open = false } = {}) {
+  if (!key) return null;
+  const card = boxesGrid.querySelector(`.boxCard[data-key="${key}"]`);
+  boxesGrid.querySelectorAll(".boxCard").forEach((node) => {
+    node.classList.toggle("selected", node === card);
+  });
+
+  if (!card) return null;
+
+  setBox(key);
+
+  if (animate) {
+    animateBoxSelection(card);
+  }
+
+  if (focus) {
+    window.setTimeout(() => card.focus(), 20);
+  }
+
+  if (open) {
+    activate("packs");
+    spawnCenterBox();
+  }
+
+  return card;
+}
+
 function renderBoxes() {
   boxesGrid.innerHTML = "";
   Object.values(BOXES).forEach((box) => {
@@ -424,9 +451,7 @@ function renderBoxes() {
     `;
 
     card.addEventListener("click", () => {
-      setBox(box.key);
-      activate("packs");
-      spawnCenterBox();
+      selectBoxHelper(box.key, { animate: true, open: true, focus: false });
     });
 
     boxesGrid.appendChild(card);
