@@ -99,6 +99,11 @@ const state = {
   autoTimer: null,
   binder: null
 };
+let opened = 0;
+let currentBox = BOXES.standard;
+let pack = null;
+let pulled = [];
+let autoRunning = false;
 
 /* -------------------------------------------------------------------------- */
 /* Binder helpers                                                             */
@@ -138,6 +143,11 @@ function initBinder() {
   saveBinder(state.binder);
   renderBinder();
 }
+const binder = loadBinder();
+RARITIES.forEach((rarity) => {
+  if (!(rarity.key in binder)) binder[rarity.key] = 0;
+});
+saveBinder(binder);
 
 function renderBinder() {
   elBinder.innerHTML = '';
@@ -154,6 +164,7 @@ function renderBinder() {
       cell.innerHTML = `
         <div>${rarity.icon === '👑' ? '👑' : rarity.icon.repeat(rarity.repeat)}</div>
         <div class="thumb-count">${state.binder[rarity.key]}</div>
+        <div class="thumb-count">${binder[rarity.key]}</div>
       `;
       wrap.appendChild(cell);
     });
@@ -253,6 +264,14 @@ function setBox(key) {
   if (state.currentPage === 'packs') {
     updateHeader('packs');
   }
+  setTimeout(() => card.classList.remove('selected'), 420);
+}
+
+function setBox(key) {
+  currentBox = BOXES[key] || BOXES.standard;
+  document.querySelector('.tab[data-page="packs"]').disabled = false;
+  elTitle.textContent = `Cereal Box — ${currentBox.title}`;
+  elSubtitle.textContent = `${currentBox.slots.length} cards • ${currentBox.desc}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -262,6 +281,7 @@ function setBox(key) {
 function buildDots() {
   elProgress.innerHTML = '';
   for (let i = 0; i < state.currentBox.slots.length; i += 1) {
+  for (let i = 0; i < currentBox.slots.length; i += 1) {
     const dot = document.createElement('div');
     dot.className = 'dot';
     dot.style.animationDelay = `${i * 60}ms`;
@@ -282,6 +302,8 @@ function clearBoard() {
   elArea.querySelectorAll('.card, .centerBox').forEach((node) => node.remove());
   elProgress.innerHTML = '';
   hideSummary();
+  elSummary.innerHTML = '';
+  elSummary.classList.remove('show');
 }
 
 function spawnCenterBox() {
@@ -289,6 +311,9 @@ function spawnCenterBox() {
   state.pulled = [];
   state.pack = null;
   buildDots();
+  buildDots();
+  pulled = [];
+  pack = null;
 
   const container = document.createElement('div');
   container.className = 'centerBox';
@@ -296,6 +321,7 @@ function spawnCenterBox() {
   container.innerHTML = `
     <div class="cube"></div>
     <div class="label">${state.currentBox.title}</div>
+    <div class="label">${currentBox.title}</div>
     <div class="left"></div>
     <div class="right"></div>
   `;
@@ -322,6 +348,38 @@ function buildPack() {
 
   results.forEach((result, index) => {
     const card = createCardElement(result, index);
+    setTimeout(() => {
+      container.remove();
+      buildPack();
+    }, prefersReducedMotion ? 0 : 420);
+  });
+
+  elArea.appendChild(container);
+  btnPrimary.textContent = 'Break Box';
+  btnPrimary.disabled = true;
+}
+
+function buildPack() {
+  const results = currentBox.slots.map((slot) => ({ key: sampleFromWeights(slot.weights), name: null }));
+  results.forEach((result) => {
+    result.name = makeCardName(result.key);
+  });
+  pack = { results, clicks: 0 };
+
+  elArea.querySelectorAll('.card').forEach((node) => node.remove());
+  results.forEach((result, index) => {
+    const rarity = RAR_INDEX[result.key];
+    const card = document.createElement('div');
+    card.className = `card ${rarity.cls}`;
+    card.style.zIndex = String(800 + index);
+    card.innerHTML = `
+      <div class="ribbon">${rarity.label}</div>
+      <div class="card-icon">${rarity.icon === '👑' ? '👑' : rarity.icon.repeat(rarity.repeat)}</div>
+      <div class="name">${result.name}</div>
+    `;
+
+    card.addEventListener('click', () => handleCardClick(card, result));
+
     elArea.appendChild(card);
   });
 
@@ -358,6 +416,11 @@ function handleCardClick(card, result) {
   renderBinder();
 
   state.pulled.push({ key: result.key, name: result.name });
+function handleCardClick(card, result) {
+  binder[result.key] = (binder[result.key] || 0) + 1;
+  saveBinder(binder);
+  renderBinder();
+  pulled.push({ key: result.key, name: result.name });
 
   if (!prefersReducedMotion) {
     card.style.transition = 'transform 0.42s cubic-bezier(.2,.8,.2,1), opacity 0.42s ease';
@@ -384,6 +447,22 @@ function finishPack() {
   showSummary();
   updatePrimary('Open Another', false);
   if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
+  setTimeout(() => {
+    card.remove();
+    if (pack) {
+      pack.clicks += 1;
+      markProgress(pack.clicks - 1);
+      if (pack.clicks >= pack.results.length) finishPack();
+    }
+  }, prefersReducedMotion ? 40 : 420);
+}
+
+function finishPack() {
+  opened += 1;
+  openedEl.textContent = opened;
+  showSummary();
+  btnPrimary.textContent = 'Open Another';
+  btnPrimary.disabled = false;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -392,6 +471,7 @@ function finishPack() {
 
 function showSummary() {
   hideSummary();
+  elSummary.innerHTML = '';
 
   const wrap = document.createElement('div');
   wrap.className = 'sumCard';
@@ -403,12 +483,17 @@ function showSummary() {
     <div>
       <div class="sumTitle">${state.currentBox.title} — Results</div>
       <div class="sumSubtitle">${state.pulled.length} cards added to your binder</div>
+    <div class="sumPack">${currentBox.emoji}</div>
+    <div>
+      <div class="sumTitle">${currentBox.title} — Results</div>
+      <div class="sumSubtitle">${pulled.length} cards added to your binder</div>
     </div>
   `;
 
   const grid = document.createElement('div');
   grid.className = 'sumGrid';
   state.pulled.forEach((pull) => {
+  pulled.forEach((pull) => {
     const rarity = RAR_INDEX[pull.key];
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
@@ -431,6 +516,9 @@ function showSummary() {
   shelf.addEventListener('click', () => {
     hideSummary();
     stopAuto();
+  shelf.textContent = 'Back to Boxes';
+  shelf.addEventListener('click', () => {
+    elSummary.classList.remove('show');
     activate('boxes');
   });
 
@@ -442,6 +530,10 @@ function showSummary() {
     hideSummary();
     spawnCenterBox();
     if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
+  again.textContent = 'Open Another';
+  again.addEventListener('click', () => {
+    elSummary.classList.remove('show');
+    spawnCenterBox();
   });
 
   actions.appendChild(shelf);
@@ -518,6 +610,31 @@ function scheduleAutoStep(delay = AUTO_STEP_MS) {
     spawnCenterBox();
     scheduleAutoStep(AUTO_STEP_MS);
   }, delay);
+function autoStepPack() {
+  const step = () => {
+    const list = [...document.querySelectorAll('.card')];
+    if (list.length === 0) return;
+    list[list.length - 1].click();
+    if (autoRunning) {
+      setTimeout(step, prefersReducedMotion ? 80 : 420);
+    }
+  };
+  step();
+}
+
+function toggleAuto() {
+  autoRunning = !autoRunning;
+  btnAuto.textContent = autoRunning ? 'Auto: ON' : 'Auto Collect';
+  if (autoRunning) {
+    if (!document.getElementById('centerBox')) {
+      spawnCenterBox();
+    }
+    setTimeout(() => {
+      const center = document.getElementById('centerBox');
+      if (center) center.click();
+      setTimeout(() => autoStepPack(), prefersReducedMotion ? 80 : 480);
+    }, prefersReducedMotion ? 0 : 160);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -544,12 +661,14 @@ function updateHeader(page) {
     home: 'Home',
     boxes: 'Boxes',
     packs: `${state.currentBox.title}`,
+    packs: `${currentBox.title}`,
     binder: 'Binder'
   };
   elTitle.textContent = `Cereal Box — ${names[page]}`;
   elSubtitle.textContent =
     page === 'packs'
       ? state.currentBox.desc
+      ? `${currentBox.slots.length} cards • ${currentBox.desc}`
       : page === 'boxes'
       ? 'Pick a box. Each has different slots and odds.'
       : page === 'home'
@@ -589,6 +708,9 @@ function runTests() {
   window.setTimeout(() => {
     const list = [...document.querySelectorAll('.card')];
     ok('All cards overlapped', list.length === state.currentBox.slots.length);
+  setTimeout(() => {
+    const list = [...document.querySelectorAll('.card')];
+    ok('All cards overlapped', list.length === currentBox.slots.length);
     let i = 0;
     const go = () => {
       const live = [...document.querySelectorAll('.card')];
@@ -603,6 +725,14 @@ function runTests() {
       alert(logs.join('\n'));
     }, (CARD_REVEAL_MS + 60) * state.currentBox.slots.length + 600);
   }, BOX_BREAK_MS + 120);
+      if (i < currentBox.slots.length) setTimeout(go, 480);
+    };
+    go();
+    setTimeout(() => {
+      ok('Summary shown', document.getElementById('summary').classList.contains('show'));
+      alert(logs.join('\n'));
+    }, 520 * currentBox.slots.length + 600);
+  }, 520);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -636,3 +766,18 @@ function init() {
 }
 
 init();
+renderBoxes();
+renderBinder();
+
+document.querySelectorAll('.tab').forEach((tab) =>
+  tab.addEventListener('click', () => {
+    if (tab.disabled) return;
+    activate(tab.dataset.page);
+  })
+);
+
+goBoxes.addEventListener('click', () => activate('boxes'));
+btnPrimary.addEventListener('click', () => spawnCenterBox());
+btnAuto.addEventListener('click', () => toggleAuto());
+
+window.runTests = runTests;
