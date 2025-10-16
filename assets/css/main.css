@@ -397,6 +397,7 @@ body {
 }
 
 .boxCard {
+  position: relative;
   border: 1px solid rgba(255, 158, 95, 0.24);
   border-radius: var(--radius-md);
   background: rgba(12, 11, 38, 0.9);
@@ -406,9 +407,20 @@ body {
   display: grid;
   gap: 12px;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
-
+.boxCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 20% -10%, rgba(255, 95, 162, 0.35), transparent 60%),
+    radial-gradient(circle at 110% 100%, rgba(83, 204, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
 .boxCard:hover,
 .boxCard:focus-visible {
   transform: translateY(-4px);
@@ -416,9 +428,17 @@ body {
   border-color: var(--accent);
   outline: none;
 }
-
+.boxCard:hover::after,
+.boxCard:focus-visible::after {
+  opacity: 0.8;
+}
 .boxCard.selected {
   transform: translateY(-6px);
+  border-color: var(--accent-strong);
+  box-shadow: 0 18px 32px rgba(255, 95, 162, 0.32);
+}
+.boxCard.selected::after {
+  opacity: 1;
 }
 
 .boxTop {
@@ -755,6 +775,11 @@ body {
 .btn[aria-pressed="true"] {
   border-color: var(--accent);
   box-shadow: 0 12px 24px rgba(83, 204, 255, 0.28);
+}
+
+.btn.secondary[aria-pressed="true"] {
+  background: linear-gradient(135deg, rgba(83, 204, 255, 0.35), rgba(255, 95, 162, 0.32));
+  color: #fff;
 }
 
 .btn[disabled] {

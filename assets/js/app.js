@@ -163,25 +163,31 @@ function loadPersistedState() {
   try {
     const raw = localStorage.getItem(LS_STATE);
     if (!raw) {
-      return { binder: ensureBinderDefaults({}), opened: 0 };
+      return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
     }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return { binder: ensureBinderDefaults({}), opened: 0 };
+      return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
     }
+    const boxKey = typeof parsed.boxKey === "string" && BOXES[parsed.boxKey] ? parsed.boxKey : state.currentBox.key;
     return {
       binder: ensureBinderDefaults(parsed.binder),
-      opened: Number.isFinite(parsed.opened) && parsed.opened >= 0 ? parsed.opened : 0
+      opened: Number.isFinite(parsed.opened) && parsed.opened >= 0 ? parsed.opened : 0,
+      boxKey
     };
   } catch (error) {
     console.warn("Failed to read saved state", error);
-    return { binder: ensureBinderDefaults({}), opened: 0 };
+    return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
   }
 }
 
 function savePersistedState() {
   try {
-    const payload = { binder: state.binder, opened: state.opened };
+    const payload = {
+      binder: state.binder,
+      opened: state.opened,
+      boxKey: state.currentBox && state.currentBox.key ? state.currentBox.key : null
+    };
     localStorage.setItem(LS_STATE, JSON.stringify(payload));
   } catch (error) {
     console.warn("Failed to save state", error);
@@ -406,6 +412,35 @@ function renderBinder() {
 /* Boxes                                                                       */
 /* -------------------------------------------------------------------------- */
 
+function selectBoxHelper(key, { animate = false, focus = false, open = false } = {}) {
+  if (!key) return null;
+  const card = boxesGrid.querySelector(`.boxCard[data-key="${key}"]`);
+  boxesGrid.querySelectorAll(".boxCard").forEach((node) => {
+    const isSelected = node === card;
+    node.classList.toggle("selected", isSelected);
+    node.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+
+  if (!card) return null;
+
+  setBox(key);
+
+  if (animate) {
+    animateBoxSelection(card);
+  }
+
+  if (focus) {
+    window.setTimeout(() => card.focus(), 20);
+  }
+
+  if (open) {
+    activate("packs");
+    spawnCenterBox();
+  }
+
+  return card;
+}
+
 function renderBoxes() {
   boxesGrid.innerHTML = "";
   Object.values(BOXES).forEach((box) => {
@@ -413,6 +448,7 @@ function renderBoxes() {
     card.className = "boxCard";
     card.type = "button";
     card.dataset.key = box.key;
+    card.setAttribute("aria-pressed", "false");
     card.innerHTML = `
       <div class="boxTop"><div class="boxEmoji" aria-hidden="true">${box.emoji}</div></div>
       <div class="boxTitle">${box.title}</div>
@@ -424,9 +460,42 @@ function renderBoxes() {
     `;
 
     card.addEventListener("click", () => {
-      setBox(box.key);
-      activate("packs");
-      spawnCenterBox();
+      selectBoxHelper(box.key, { animate: true, open: true, focus: false });
+    });
+
+    card.addEventListener("keydown", (event) => {
+      const { key } = event;
+      if (key === "Enter" || key === " ") {
+        event.preventDefault();
+        selectBoxHelper(box.key, { animate: true, open: true, focus: false });
+        return;
+      }
+      const cards = [...boxesGrid.querySelectorAll(".boxCard")];
+      const index = cards.indexOf(card);
+      if (index === -1) return;
+      if (key === "ArrowRight" || key === "ArrowDown") {
+        event.preventDefault();
+        const next = cards[(index + 1) % cards.length];
+        if (next) next.focus();
+        return;
+      }
+      if (key === "ArrowLeft" || key === "ArrowUp") {
+        event.preventDefault();
+        const prev = cards[(index - 1 + cards.length) % cards.length];
+        if (prev) prev.focus();
+        return;
+      }
+      if (key === "Home") {
+        event.preventDefault();
+        const first = cards[0];
+        if (first) first.focus();
+        return;
+      }
+      if (key === "End") {
+        event.preventDefault();
+        const last = cards[cards.length - 1];
+        if (last) last.focus();
+      }
     });
 
     boxesGrid.appendChild(card);
@@ -448,6 +517,13 @@ function setBox(key) {
   if (state.currentPage === "packs") {
     updateHeader("packs");
   }
+  savePersistedState();
+}
+
+function focusCurrentBoxCard() {
+  const selected = boxesGrid.querySelector(".boxCard.selected") || boxesGrid.querySelector(".boxCard");
+  if (!selected) return;
+  window.setTimeout(() => selected.focus(), 20);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -814,6 +890,10 @@ function wireNav() {
       activate(page);
       if (page === "packs" && !elArea.querySelector(".card, #centerBox")) {
         spawnCenterBox();
+        return;
+      }
+      if (page === "boxes") {
+        focusCurrentBoxCard();
       }
     });
   });
@@ -822,6 +902,7 @@ function wireNav() {
 function wireControls() {
   goBoxes.addEventListener("click", () => {
     activate("boxes");
+    focusCurrentBoxCard();
   });
 
   btnPrimary.addEventListener("click", () => {
@@ -869,10 +950,14 @@ function init() {
   state.opened = saved.opened;
   openedEl.textContent = state.opened;
   renderBinder();
-  renderBoxes();
+  const selectBox = renderBoxes();
   wireNav();
   wireControls();
   ensurePacksTabEnabled();
+  const defaultBoxKey = saved.boxKey && BOXES[saved.boxKey] ? saved.boxKey : state.currentBox.key;
+  if (typeof selectBox === "function") {
+    selectBox(defaultBoxKey, { focus: false, animate: false });
+  }
   updatePrimary("Choose a box first", true);
   updateRotateControl(false);
   updateHeader("home");
