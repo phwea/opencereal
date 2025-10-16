@@ -354,7 +354,8 @@ function spawnCenterBox() {
   });
 
   elArea.appendChild(button);
-  updatePrimary("Break Box", true);
+  updatePrimary("Break Box", false);
+  window.setTimeout(() => button.focus(), 20);
 }
 
 function buildPack() {
@@ -372,7 +373,11 @@ function buildPack() {
   });
 
   markProgress(-1);
-  updatePrimary("Collect Cards", true);
+  updatePrimary("Collect Cards", false);
+  window.setTimeout(() => {
+    const topCard = getTopCard();
+    if (topCard) topCard.focus();
+  }, 60);
 }
 
 function createCardElement(result, index) {
@@ -597,8 +602,17 @@ function wireControls() {
       spawnCenterBox();
       return;
     }
-    if (document.getElementById("centerBox")) {
-      document.getElementById("centerBox").focus();
+    const centerBox = document.getElementById("centerBox");
+    if (centerBox) {
+      centerBox.click();
+      return;
+    }
+    const topCard = getTopCard();
+    if (topCard) {
+      topCard.click();
+      return;
+    }
+    if (state.pack) {
       return;
     }
     spawnCenterBox();
