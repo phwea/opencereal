@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cereal Box — Pocket-feel Stack Flow</title>
+  <style>
+    :root{ --bg:#0b0f17; --panel:#121826; --ink:#e6eefc; --muted:#9fb0d0; --accent:#5aa3ff; --edge:#1a2238; --edge2:#26365f; }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;
+      color:var(--ink);
+      background:radial-gradient(1200px 800px at 70% -10%,#1b2744 0%,#0b0f17 45%,#0b0f17 100%);
+    }
+    .app{max-width:1200px;margin:0 auto;padding:20px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+    h1{margin:0;font-size:clamp(18px,3vw,26px)}
+    .sub{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+    /* Tabs */
+    .tabs{display:flex;gap:8px}
+    .tab{cursor:pointer;border:1px solid var(--edge2);background:#0f162a;color:var(--ink);padding:8px 12px;border-radius:10px}
+    .tab[disabled]{opacity:.5;cursor:not-allowed}
+    .tab.active{background:var(--accent); color:#08101f; box-shadow:0 4px 14px rgba(90,163,255,.35)}
+
+    .pages{position:relative}
+    .page{display:none}
+    .page.active{display:block; animation:fade .18s ease}
+    @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Panels */
+    .panel{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:14px}
+
+    /* Home */
+    .hero{display:grid;place-items:center;min-height:460px;border-radius:16px;background:radial-gradient(600px 400px at 50% 0%, #162140, #0b0f17)}
+    .hero h2{margin:8px 0 6px;font-size:clamp(22px,4vw,36px)}
+    .hero p{margin:0;color:var(--muted)}
+    .bigbtn{margin-top:16px;cursor:pointer;border:none;border-radius:14px;padding:14px 18px;font-weight:900;background:var(--accent);color:#08101f;box-shadow:0 10px 24px rgba(90,163,255,.35);font-size:16px}
+
+    /* Boxes grid */
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+    .boxCard{position:relative;border:1px solid var(--edge2);border-radius:16px;padding:14px;background:#0f162a;cursor:pointer;overflow:hidden}
+    .boxCard:hover{box-shadow:0 10px 24px rgba(0,0,0,.45)}
+    .boxTop{height:140px;border-radius:12px;background:linear-gradient(135deg,#1d2440,#10152a 60%);border:2px solid #2f3b63;display:grid;place-items:center;position:relative}
+    .boxTop::after{content:"";position:absolute;inset:0;background:radial-gradient(80% 60% at 50% -10%,rgba(255,255,255,.25),transparent 60%);opacity:.25}
+    .boxTitle{margin:10px 0 4px;font-weight:900}
+    .boxMeta{color:var(--muted);font-size:12px}
+    .chip{display:inline-flex;gap:6px;align-items:center;background:#0b1326;border:1px solid #26365f;padding:4px 8px;border-radius:999px;color:#b9c7e6;font-size:12px}
+
+    /* Packs */
+    .cta{display:flex;gap:10px;justify-content:center;margin-top:8px}
+    .btn{cursor:pointer;border:none;border-radius:12px;padding:12px 14px;font-weight:800;background:var(--accent);color:#091120;box-shadow:0 6px 18px rgba(90,163,255,.35)}
+    .btn.secondary{background:#17223b;color:var(--ink);border:1px solid var(--edge2);box-shadow:none}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+
+    .dropArea{position:relative;overflow:hidden;border-radius:16px;background:linear-gradient(180deg,#0b1220,#0b111e);min-height:460px}
+    .progress{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:3}
+    .dot{width:8px;height:8px;border-radius:50%;background:#31477e;opacity:.7}
+    .dot.on{background:#78a6ff;opacity:1}
+
+    /* Center Box (break) */
+    .centerBox{position:absolute;z-index:4;left:50%;top:48%;transform:translate(-50%,-50%);width:220px;height:260px;display:grid;place-items:center;cursor:pointer}
+    .centerBox .cube{position:relative;width:100%;height:100%;border-radius:16px;background:linear-gradient(135deg,#1d2440,#10152a 60%);border:2px solid #2f3b63;box-shadow:0 16px 44px rgba(0,0,0,.55)}
+    .centerBox .label{position:absolute;inset:0;display:grid;place-items:center;font-weight:900;letter-spacing:.5px}
+    .centerBox.break .cube{animation:shake .36s ease}
+    @keyframes shake{10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-2px)}40%{transform:translateX(2px)}60%{transform:translateX(0)}}
+    .centerBox.break .left, .centerBox.break .right{opacity:1}
+    .centerBox .left,.centerBox .right{position:absolute;inset:0;border-radius:16px;background:inherit;border:inherit;opacity:0}
+    .centerBox.break .left{animation:crackL .42s ease forwards}
+    .centerBox.break .right{animation:crackR .42s ease forwards}
+    @keyframes crackL{to{transform:translate(-80%,-20%) rotate(-18deg);opacity:0}}
+    @keyframes crackR{to{transform:translate(80%,-20%) rotate(18deg);opacity:0}}
+
+    /* Card (face-up, overlapped) */
+    .card{
+      position:absolute; left:50%; top:48%; transform:translate(-50%,-50%);
+      width:120px; height:168px; border-radius:16px; display:grid; place-items:center;
+      font-size:30px; color:white; cursor:pointer;
+      border:2px solid rgba(255,255,255,.08);
+      box-shadow:0 18px 40px rgba(0,0,0,.6), inset 0 0 30px rgba(255,255,255,.06);
+      transition:transform .18s ease;
+      will-change:transform;
+    }
+    .card:active{ transform:translate(-50%,-52%) scale(.98) }
+    .card .name{
+      position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+      font-size:12px; padding:3px 8px; border-radius:8px;
+      background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.12); color:#e9f0ff;
+    }
+    .ribbon{
+      position:absolute; top:-8px; right:-10px; background:#1f2d4f; border:1px solid #3b589f;
+      color:#d9e6ff; font-weight:800; font-size:10px; padding:2px 6px; border-radius:8px;
+      box-shadow:0 6px 14px rgba(0,0,0,.35); transform:rotate(7deg)
+    }
+
+    /* Rarity colorways */
+    .rar-1d{background:#1a233b;color:#c6d0e9}
+    .rar-2d{background:#15283c;color:#cfe4ff}
+    .rar-3d{background:#0e1f18;color:#bfe9cf}
+    .rar-4d{background:#25163f;color:#e7d4ff}
+    .rar-1s{background:#392018;color:#ffd4c2}
+    .rar-2s{background:#3a2830;color:#ffd9e9}
+    .rar-3s{background:#12313a;color:#bcecff}
+    .rar-cr{background:conic-gradient(from 0deg,#fff2a6,#ffd166,#ffe66d,#fff2a6);color:#1a160e;border-color:rgba(0,0,0,.25)}
+
+    /* Inventory/summary */
+    .summary{position:absolute;inset:0;background:rgba(8,12,20,.82);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:10}
+    .summary.show{display:flex;animation:fade .2s ease}
+    .sumCard{background:#0f172a;border:1px solid #26365f;border-radius:16px; padding:16px; width:min(760px,92vw)}
+    .sumHeader{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+    .sumPack{width:90px;height:110px;border:2px solid #2f3b63;border-radius:12px;background:linear-gradient(135deg,#1d2440,#10152a 60%);display:grid;place-items:center;font-size:34px}
+    .sumGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px}
+    .thumb{height:110px;border-radius:12px;display:grid;place-items:center;border:1px solid #2e3c61}
+    .sumActions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+    .ok{background:var(--accent);border:none;border-radius:10px;padding:10px 12px;font-weight:800;color:#08101f}
+    .ghost{background:#0f162a;border:1px solid #26365f;border-radius:10px;padding:10px 12px;font-weight:700;color:var(--ink)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1 id="title">Cereal Box — Home</h1>
+        <p class="sub" id="subtitle">Click a box → a stack is generated → click the top card to send it to your binder. After the last card, a summary shows your pulls.</p>
+      </div>
+      <nav class="tabs">
+        <button class="tab active" data-page="home">Home</button>
+        <button class="tab" data-page="boxes">Boxes</button>
+        <button class="tab" data-page="packs" disabled>Packs</button>
+        <button class="tab" data-page="binder">Binder</button>
+      </nav>
+    </header>
+
+    <main class="pages">
+      <section id="page-home" class="page active">
+        <div class="panel hero">
+          <div style="text-align:center">
+            <h2>Welcome to Cereal Box</h2>
+            <p>Pick a box. Odds vary by box.</p>
+            <button id="goBoxes" class="bigbtn">Enter Box Shelf →</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-boxes" class="page">
+        <div class="panel">
+          <h3 style="margin:0 0 10px">Pick a Box</h3>
+          <div class="grid" id="boxesGrid"></div>
+        </div>
+      </section>
+
+      <section id="page-packs" class="page">
+        <div class="panel dropArea" id="area">
+          <div class="progress" id="progress"></div>
+          <div class="summary" id="summary"></div>
+        </div>
+        <div class="cta" style="justify-content:center;margin-top:10px">
+          <button id="btnPrimary" class="btn">Choose a box first</button>
+          <button id="btnAuto" class="btn secondary">Auto Collect</button>
+        </div>
+        <div style="margin-top:10px;font-size:13px;color:var(--muted)">Opened: <b id="opened">0</b></div>
+      </section>
+
+      <section id="page-binder" class="page">
+        <div class="panel" style="margin-bottom:12px">
+          <h3 style="margin:0 0 6px">Binder Totals</h3>
+          <div id="binder"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+  'use strict';
+
+  /* ---------- Rarities ---------- */
+  const RARITIES=[
+    {key:'1d',label:'1◆',icon:'◆',repeat:1,cls:'rar-1d', pool:'common'},
+    {key:'2d',label:'2◆',icon:'◆',repeat:2,cls:'rar-2d', pool:'uncommon'},
+    {key:'3d',label:'3◆',icon:'◆',repeat:3,cls:'rar-3d', pool:'rare'},
+    {key:'4d',label:'4◆',icon:'◆',repeat:4,cls:'rar-4d', pool:'ex'},
+    {key:'1s',label:'1★',icon:'★',repeat:1,cls:'rar-1s', pool:'illustration'},
+    {key:'2s',label:'2★',icon:'★',repeat:2,cls:'rar-2s', pool:'special'},
+    {key:'3s',label:'3★',icon:'★',repeat:3,cls:'rar-3s', pool:'immersive'},
+    {key:'cr',label:'👑',icon:'👑',repeat:1,cls:'rar-cr', pool:'crown'}
+  ];
+  const RAR_INDEX=Object.fromEntries(RARITIES.map(r=>[r.key,r]));
+
+  /* ---------- Names ---------- */
+  const NAME_ADJ_COMMON=["Chewy","Sunny","Rustle","Brisk","Hollow","Misty","Snappy","Pebbly","Crisp","Breezy"];
+  const NAME_ADJ_RARE=["Luminous","Feral","Arc","Gale","Blazing","Nebula","Auric","Prismatic","Cryo","Volt"];
+  const NAME_NOUNS=["Sprout","Pounce","Fang","Wisp","Warden","Stride","Tide","Spark","Grove","Raptor","Echo","Gloom","Nimbus","Rune"];
+  function makeCardName(rKey){
+    const adjPool=(rKey==='3d'||rKey==='4d'||rKey==='1s'||rKey==='2s'||rKey==='3s'||rKey==='cr')?NAME_ADJ_RARE:NAME_ADJ_COMMON;
+    const adj=adjPool[Math.floor(Math.random()*adjPool.length)];
+    const noun=NAME_NOUNS[Math.floor(Math.random()*NAME_NOUNS.length)];
+    return `${adj} ${noun}`;
+  }
+
+  /* ---------- Boxes ---------- */
+  const BOXES={
+    mini:{ key:'mini', title:'Mini Box', emoji:'🥣', slots:[
+      {weights:{'1d':1}},
+      {weights:{'1d':1}},
+      {weights:{'1d':65,'2d':35}},
+      {weights:{'2d':70,'3d':20,'4d':8,'1s':1.7,'2s':0.28,'3s':0.02}},
+    ], desc:'4 cards • budget odds' },
+    standard:{ key:'standard', title:'Standard Box', emoji:'📦', slots:[
+      {weights:{'1d':1}}, {weights:{'1d':1}}, {weights:{'1d':1}},
+      {weights:{'1d':70,'2d':30}},
+      {weights:{'2d':70,'3d':20,'4d':7,'1s':2.5,'2s':0.9,'3s':0.09,'cr':0.01}},
+    ], desc:'5 cards • baseline odds' },
+    premium:{ key:'premium', title:'Premium Box', emoji:'🎁', slots:[
+      {weights:{'1d':1}}, {weights:{'1d':1}}, {weights:{'1d':1}},
+      {weights:{'2d':60,'3d':30,'4d':10}},
+      {weights:{'3d':45,'4d':25,'1s':15,'2s':8,'3s':2.8,'cr':0.2}},
+    ], desc:'5 cards • juiced odds' }
+  };
+
+  /* ---------- DOM ---------- */
+  const getPage=(k)=>document.getElementById(`page-${k}`);
+  const elTitle=document.getElementById('title'), elSubtitle=document.getElementById('subtitle');
+  const elArea=document.getElementById('area'), elProgress=document.getElementById('progress');
+  const elSummary=document.getElementById('summary');
+  const elBinder=document.getElementById('binder');
+  const btnPrimary=document.getElementById('btnPrimary'), btnAuto=document.getElementById('btnAuto');
+  const boxesGrid=document.getElementById('boxesGrid'), goBoxes=document.getElementById('goBoxes');
+  const openedEl=document.getElementById('opened');
+
+  /* ---------- State ---------- */
+  let opened=0; let currentBox=BOXES.standard;
+  let pack=null;        // {results:[{key,name}], clicks:number}
+  let pulled=[];        // array of pulled {key,name} for summary
+  let autoTimer=null; let autoRunning=false;
+
+  /* ---------- Binder ---------- */
+  const LS_BINDER='cb_stack_binder_v1';
+  function loadBinder(){try{return JSON.parse(localStorage.getItem(LS_BINDER))||{}}catch{return{}}}
+  function saveBinder(d){localStorage.setItem(LS_BINDER,JSON.stringify(d))}
+  const binder=loadBinder(); for(const r of RARITIES) if(!(r.key in binder)) binder[r.key]=0; saveBinder(binder)
+
+  function renderBinder(){
+    elBinder.innerHTML='';
+    const wrap=document.createElement('div');
+    wrap.style.display='grid';
+    wrap.style.gridTemplateColumns='repeat(auto-fill,minmax(120px,1fr))';
+    wrap.style.gap='8px';
+    RARITIES.slice().reverse().forEach(r=>{
+      const cell=document.createElement('div');
+      cell.className='thumb'; cell.style.height='68px';
+      cell.innerHTML=`<div>${(r.icon==='👑')?'👑':r.icon.repeat(r.repeat)}</div>
+                      <div style="font-size:12px;color:var(--muted)">${binder[r.key]}</div>`;
+      wrap.appendChild(cell);
+    });
+    elBinder.appendChild(wrap);
+  }
+
+  /* ---------- Helpers ---------- */
+  function sampleFromWeights(w){
+    const entries=Object.entries(w);
+    let total=0; for(const[,x] of entries) total+=x;
+    let r=Math.random()*total, acc=0;
+    for(const [k,x] of entries){ acc+=x; if(r<=acc) return k; }
+    return entries[0][0];
+  }
+
+  /* ---------- Boxes UI ---------- */
+  function renderBoxes(){
+    boxesGrid.innerHTML='';
+    Object.values(BOXES).forEach(b=>{
+      const card=document.createElement('div');
+      card.className='boxCard'; card.dataset.key=b.key;
+      card.innerHTML=`
+        <div class="boxTop"><div style="font-size:42px">${b.emoji}</div></div>
+        <div class="boxTitle">${b.title}</div>
+        <div class="boxMeta">${b.desc}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <span class="chip">Slots: ${b.slots.length}</span>
+          <span class="chip">Top: ${topTier(b)}</span>
+        </div>`;
+      card.addEventListener('click',()=>{
+        setBox(b.key); activate('packs'); spawnCenterBox();
+      });
+      boxesGrid.appendChild(card);
+    });
+  }
+  function topTier(b){
+    const last=b.slots[b.slots.length-1];
+    const keys=Object.keys(last.weights);
+    const order=['1d','2d','3d','4d','1s','2s','3s','cr'];
+    keys.sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+    return RAR_INDEX[keys[keys.length-1]].label;
+  }
+  function setBox(key){
+    currentBox=BOXES[key]||BOXES.standard;
+    document.querySelector('.tab[data-page="packs"]').disabled=false;
+    elTitle.textContent=`Cereal Box — ${currentBox.title}`;
+    elSubtitle.textContent=`${currentBox.slots.length} cards • ${currentBox.desc}`;
+  }
+
+  /* ---------- Progress ---------- */
+  function buildDots(){
+    elProgress.innerHTML='';
+    for(let i=0;i<currentBox.slots.length;i++){
+      const dot=document.createElement('div'); dot.className='dot'; elProgress.appendChild(dot);
+    }
+  }
+  function markProgress(idx){
+    const dots=[...elProgress.children];
+    dots.forEach((d,i)=>d.classList.toggle('on', i<=idx));
+  }
+
+  /* ---------- Center break & Pack ---------- */
+  function spawnCenterBox(){
+    clearBoard(); buildDots(); pulled=[]; pack=null;
+    const c=document.createElement('div');
+    c.className='centerBox'; c.id='centerBox';
+    c.innerHTML=`<div class="cube"></div><div class="label">${currentBox.title}</div><div class="left"></div><div class="right"></div>`;
+    elArea.appendChild(c);
+    c.addEventListener('click',()=>{
+      c.classList.add('break');
+      setTimeout(()=>{ c.remove(); buildPack(); }, 420);
+    });
+    btnPrimary.textContent='Break Box'; btnPrimary.disabled=true;
+  }
+
+  function buildPack(){
+    // 1) Pre-generate results (predetermined)
+    const results=currentBox.slots.map(s=>({ key: sampleFromWeights(s.weights), name: null }));
+    for(const r of results){ r.name = makeCardName(r.key); }
+    pack = { results, clicks: 0 };
+
+    // 2) Render all cards EXACTLY overlapped (topmost last)
+    elArea.querySelectorAll('.card').forEach(n=>n.remove());
+    results.forEach((res, i)=>{
+      const r=RAR_INDEX[res.key];
+      const el=document.createElement('div');
+      el.className=`card ${r.cls}`;
+      el.style.zIndex=String(800+i);
+      el.style.left='50%'; el.style.top='48%';
+      el.style.transform='translate(-50%,-50%)';
+      el.style.position='absolute';
+      el.innerHTML=`<div class="ribbon">${r.label}</div>
+                    <div style="font-size:34px">${(r.icon==='👑')?'👑':r.icon.repeat(r.repeat)}</div>
+                    <div class="name">${res.name}</div>`;
+
+      el.addEventListener('click',()=>{
+        // add to binder at click
+        binder[res.key]=(binder[res.key]||0)+1; saveBinder(binder); renderBinder();
+        pulled.push({key:res.key, name:res.name});
+        // smooth slide to the side (Pocket-ish)
+        el.style.transition='transform .42s cubic-bezier(.2,.8,.2,1), opacity .42s ease';
+        el.style.transform=`translate(calc(50% + ${elArea.clientWidth*0.35}px), -20%) rotate(6deg) scale(.84)`;
+        setTimeout(()=>{
+          el.remove();
+          pack.clicks++;
+          markProgress(pack.clicks-1);
+          if(pack.clicks>=results.length){ finishPack(); }
+        }, 420);
+      });
+
+      elArea.appendChild(el);
+    });
+    markProgress(-1);
+  }
+
+  function clearBoard(){
+    elArea.querySelectorAll('.card,.centerBox').forEach(n=>n.remove());
+    elProgress.innerHTML=''; elSummary.innerHTML=''; elSummary.classList.remove('show');
+  }
+
+  function finishPack(){
+    opened++; openedEl.textContent=opened;
+    showSummary();
+    btnPrimary.textContent='Open Another'; btnPrimary.disabled=false;
+  }
+
+  /* ---------- Summary ---------- */
+  function showSummary(){
+    elSummary.innerHTML='';
+    const wrap=document.createElement('div'); wrap.className='sumCard';
+    const head=document.createElement('div'); head.className='sumHeader';
+    head.innerHTML=`<div class="sumPack">${currentBox.emoji}</div>
+                    <div><div style="font-weight:900">${currentBox.title} — Results</div>
+                    <div style="color:var(--muted);font-size:12px">${pulled.length} cards added to your binder</div></div>`;
+    const grid=document.createElement('div'); grid.className='sumGrid';
+    for(const p of pulled){
+      const r=RAR_INDEX[p.key];
+      const t=document.createElement('div'); t.className='thumb';
+      t.innerHTML=`<div class="card ${r.cls}" style="position:relative;width:100%;height:100%;left:auto;top:auto;transform:none;cursor:default">
+                      <div style="font-size:28px">${(r.icon==='👑')?'👑':r.icon.repeat(r.repeat)}</div>
+                      <div class="name" style="font-size:11px">${p.name}</div>
+                   </div>`;
+      grid.appendChild(t);
+    }
+    const actions=document.createElement('div'); actions.className='sumActions';
+    const again=document.createElement('button'); again.className='ok'; again.textContent='Open Another';
+    again.addEventListener('click',()=>{ elSummary.classList.remove('show'); spawnCenterBox(); });
+    const shelf=document.createElement('button'); shelf.className='ghost'; shelf.textContent='Back to Boxes';
+    shelf.addEventListener('click',()=>{ elSummary.classList.remove('show'); activate('boxes'); });
+    actions.appendChild(shelf); actions.appendChild(again);
+    wrap.appendChild(head); wrap.appendChild(grid); wrap.appendChild(actions);
+    elSummary.appendChild(wrap); elSummary.classList.add('show');
+  }
+
+  /* ---------- Auto collect ---------- */
+  function autoStepPack(){
+    const interval=420;
+    const step=()=>{
+      const list=[...document.querySelectorAll('.card')];
+      if(list.length===0) return;
+      // click the topmost (last appended)
+      list[list.length-1].click();
+      setTimeout(step, interval);
+    };
+    step();
+  }
+  function toggleAuto(){
+    autoRunning=!autoRunning; btnAuto.textContent=autoRunning? 'Auto: ON' : 'Auto Collect';
+    if(autoRunning){
+      if(!document.getElementById('centerBox')){ spawnCenterBox(); }
+      setTimeout(()=>{
+        const cb=document.getElementById('centerBox'); if(cb) cb.click();
+        setTimeout(()=>autoStepPack(), 480);
+      }, 160);
+    } else {
+      if(autoTimer) clearTimeout(autoTimer); autoTimer=null;
+    }
+  }
+
+  /* ---------- Tests ---------- */
+  function runTests(){
+    const logs=[]; const ok=(n,p)=>logs.push(`${p?'✅':'❌'} ${n}`);
+    // Slot invariants for Standard (simple sanity)
+    const S5=BOXES.standard.slots; ok('Standard: 5 slots', S5.length===5);
+    let pass=true; for(let t=0;t<150;t++){for(let i=0;i<3;i++) if(sampleFromWeights(S5[i].weights)!=='1d') pass=false} ok('Std first 3 are 1◆', pass);
+    pass=true; for(let t=0;t<800;t++){const k=sampleFromWeights(S5[4].weights); if(k==='1d'){pass=false;break}} ok('Std last ≠ 1◆', pass);
+
+    // Flow: after crack, only top card should be clickable; clicking through N shows summary
+    activate('packs'); setBox('standard'); spawnCenterBox();
+    document.getElementById('centerBox').click();
+    setTimeout(()=>{
+      const list=[...document.querySelectorAll('.card')];
+      ok('All cards overlapped', list.length===currentBox.slots.length);
+      // click through them
+      let i=0; const go=()=>{ const live=[...document.querySelectorAll('.card')]; if(!live.length) return;
+        live[live.length-1].click(); i++; if(i<currentBox.slots.length) setTimeout(go, 480);
+      }; go();
+      setTimeout(()=>{ ok('Summary shown', document.getElementById('summary').classList.contains('show')); alert(logs.join('\n')); }, 520*currentBox.slots.length+600);
+    }, 520);
+  }
+
+  /* ---------- Navigation ---------- */
+  function activate(page){
+    ['home','boxes','packs','binder'].forEach(k=>{
+      const el=getPage(k); const tab=document.querySelector(`.tab[data-page="${k}"]`);
+      const on=(k===page); el.classList.toggle('active',on); tab.classList.toggle('active',on);
+    });
+    updateHeader(page);
+  }
+  function updateHeader(page){
+    const names={home:'Home', boxes:'Boxes', packs:`${currentBox.title}`, binder:'Binder'};
+    elTitle.textContent=`Cereal Box — ${names[page]}`;
+    elSubtitle.textContent=(page==='packs')
+      ? `${currentBox.slots.length} cards • ${currentBox.desc}`
+      : (page==='boxes')
+      ? `Pick a box. Each has different slots and odds.`
+      : (page==='home')
+      ? `Click a box → stacked cards → click to collect → summary.`
+      : `Totals by rarity symbol.`;
+  }
+
+  /* ---------- Init & Wire ---------- */
+  renderBoxes(); renderBinder();
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(t.disabled) return; activate(t.dataset.page) }));
+  goBoxes.addEventListener('click',()=>activate('boxes'));
+  btnPrimary.addEventListener('click',()=>spawnCenterBox());
+  btnAuto.addEventListener('click',toggleAuto);
+  // expose tests if you want to run them in console
+  window.runTests=runTests;
+  </script>
+</body>
+</html>
