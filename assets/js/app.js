@@ -17,6 +17,10 @@ const CARD_ROTATION_RESET_DURATION = 220;
 
 const DIAMOND_SYMBOL = "⬦";
 
+const STACK_OFFSET_X = -14;
+const STACK_OFFSET_Y = 12;
+const STACK_OFFSET_Z = -28;
+
 const RARITIES = [
   { key: "1d", label: DIAMOND_SYMBOL, icon: DIAMOND_SYMBOL, repeat: 1, cls: "rar-1d", pool: "common" },
   { key: "2d", label: DIAMOND_SYMBOL.repeat(2), icon: DIAMOND_SYMBOL, repeat: 2, cls: "rar-2d", pool: "uncommon" },
@@ -258,10 +262,8 @@ function applyRotationToCard(card, mode = "instant") {
   }
 
   const { angleX, angleY } = state.cardRotation;
-  const tiltX = Math.abs(angleX) > 0.01 ? `${angleX}deg` : "0deg";
-  const tiltY = Math.abs(angleY) > 0.01 ? `${angleY}deg` : "0deg";
-  card.style.setProperty("--tilt-x", tiltX);
-  card.style.setProperty("--tilt-y", tiltY);
+  card.style.setProperty("--tilt-x", `${angleX}deg`);
+  card.style.setProperty("--tilt-y", `${angleY}deg`);
 
   if (mode === "smooth") {
     window.setTimeout(() => {
@@ -566,30 +568,6 @@ function markProgress(idx) {
   });
 }
 
-function getStackElement() {
-  return elArea.querySelector(STACK_SELECTOR);
-}
-
-function restackCards({ immediate = false } = {}) {
-  const stack = getStackElement();
-  if (!stack) return;
-  const cards = [...stack.querySelectorAll(".card")];
-  cards.forEach((card, index) => {
-    const depth = cards.length - index - 1;
-    card.style.setProperty("--stack-offset", depth);
-    card.style.zIndex = String(800 + index);
-    card.classList.toggle("card-top", index === cards.length - 1);
-    if (immediate) {
-      card.classList.add("card-no-transition");
-      requestAnimationFrame(() => {
-        if (card.isConnected) {
-          card.classList.remove("card-no-transition");
-        }
-      });
-    }
-  });
-}
-
 function resetDiscardShelf() {
   if (!elDiscard) return;
   elDiscard.innerHTML = "";
@@ -635,9 +613,25 @@ function animateCardToDiscard(card) {
     translateY = targetY - currentY;
     rotate = -12;
   }
+  card.style.animation = "none";
+  card.style.setProperty("--tilt-x", "0deg");
+  card.style.setProperty("--tilt-y", "0deg");
   card.style.transition = `transform ${CARD_REVEAL_MS}ms cubic-bezier(.22,1,.36,1), opacity ${CARD_REVEAL_MS}ms ease`;
   card.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${rotate}deg) scale(0.8)`;
   card.style.opacity = "0";
+}
+
+function restackCards() {
+  const cards = [...elArea.querySelectorAll(".card")];
+  const total = cards.length;
+  cards.forEach((node, idx) => {
+    const depth = total - idx - 1;
+    node.style.setProperty("--stack-depth", String(depth));
+    node.style.setProperty("--stack-x", `${depth * STACK_OFFSET_X}px`);
+    node.style.setProperty("--stack-y", `${depth * STACK_OFFSET_Y}px`);
+    node.style.setProperty("--stack-z", `${depth * STACK_OFFSET_Z}px`);
+    node.style.zIndex = String(800 + idx);
+  });
 }
 
 function spawnCenterBox() {
@@ -661,16 +655,18 @@ function spawnCenterBox() {
   button.id = "centerBox";
   button.innerHTML = `
     <span class="visually-hidden">Break ${state.currentBox.title}</span>
-    <div class="cereal-box__lid" aria-hidden="true"></div>
-    <div class="cereal-box__body">
-      <div class="cereal-box__cards" aria-hidden="true">
-        <div class="cereal-box__card cereal-box__card--front"></div>
-        <div class="cereal-box__card cereal-box__card--mid"></div>
-        <div class="cereal-box__card cereal-box__card--back"></div>
+    <div class="box-shell" aria-hidden="true">
+      <div class="box-lid"></div>
+      <div class="box-brand">Cereal Lab</div>
+      <div class="box-name">${state.currentBox.title}</div>
+      <div class="box-count">${state.currentBox.slots.length} cards inside</div>
+      <div class="box-window">
+        <div class="box-stack">
+          <span class="box-card" style="--i: 0"></span>
+          <span class="box-card" style="--i: 1"></span>
+          <span class="box-card" style="--i: 2"></span>
+        </div>
       </div>
-      <div class="cereal-box__title">${state.currentBox.emoji} ${state.currentBox.title}</div>
-      <div class="cereal-box__label">${state.currentBox.desc}</div>
-      <div class="cereal-box__badge">Break to reveal · Top ${topTierLabel(state.currentBox)}</div>
     </div>
   `;
 
@@ -718,8 +714,8 @@ function buildPack() {
   stack.querySelectorAll(".card").forEach((node) => node.remove());
 
   results.forEach((result, index) => {
-    const card = createCardElement(result, index);
-    stack.appendChild(card);
+    const card = createCardElement(result, index, results.length);
+    elArea.appendChild(card);
     if (!prefersReducedMotion) {
       requestAnimationFrame(() => {
         card.classList.add("card-enter--show");
@@ -743,14 +739,18 @@ function buildPack() {
   }, 60);
 }
 
-function createCardElement(result, index) {
+function createCardElement(result, index, total) {
   const rarity = RAR_INDEX[result.key];
   const card = document.createElement("div");
   card.className = `card ${rarity.cls} card-enter`;
   card.dataset.index = String(index);
   card.style.zIndex = String(800 + index);
   card.style.touchAction = "none";
-  card.style.setProperty("--stack-offset", "0");
+  const depth = total - index - 1;
+  card.style.setProperty("--stack-depth", String(depth));
+  card.style.setProperty("--stack-x", `${depth * STACK_OFFSET_X}px`);
+  card.style.setProperty("--stack-y", `${depth * STACK_OFFSET_Y}px`);
+  card.style.setProperty("--stack-z", `${depth * STACK_OFFSET_Z}px`);
   card.style.setProperty("--tilt-x", "0deg");
   card.style.setProperty("--tilt-y", "0deg");
   card.innerHTML = `
@@ -846,7 +846,9 @@ function finishPack() {
 
 function showSummary() {
   elSummary.innerHTML = "";
-  elSummary.dataset.empty = "false";
+  const heading = document.createElement("h4");
+  heading.textContent = "This Pack";
+  elSummary.appendChild(heading);
 
   const hero = state.pulled.reduce((best, item) => {
     if (!best) return item;
@@ -985,7 +987,7 @@ function updateHeader(page) {
   };
   elTitle.textContent = `Cereal Box — ${titles[page]}`;
   if (page === "packs" && state.currentBox) {
-    elSubtitle.textContent = `${state.currentBox.slots.length} cards • ${state.currentBox.desc}`;
+    elSubtitle.textContent = `${state.currentBox.slots.length}-card stack • Snap the seal and reveal each pull.`;
   } else if (page === "boxes") {
     elSubtitle.textContent = "Pick a box. Each has different slots and odds.";
   } else if (page === "binder") {

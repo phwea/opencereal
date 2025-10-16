@@ -56,25 +56,33 @@
         </section>
 
         <section id="page-packs" class="page" aria-labelledby="packsHeading">
-          <div class="flow-layout">
-            <div class="flow-primary">
-              <div class="panel stage-panel" aria-labelledby="packsHeading">
+          <div class="pack-screen">
+            <div class="pack-stage panel">
+              <div class="stage-head">
                 <div class="panel-head">
                   <h3 id="packsHeading" class="panel-title">Pack Opening</h3>
-                  <p class="panel-subtitle">Break the cereal box to launch the stack.</p>
+                  <p class="panel-subtitle">Crack the cereal box, then peel the stack one card at a time.</p>
                 </div>
-                <div id="area" class="pack-stage" role="presentation">
-                  <div class="pack-stage__surface" aria-hidden="true"></div>
-                  <div id="progress" class="progress" aria-hidden="true"></div>
-                </div>
+                <div id="progress" class="progress" aria-hidden="true"></div>
               </div>
-              <div class="panel summary-panel" aria-live="polite">
-                <div class="panel-head">
-                  <h4 class="panel-title">Pack Summary</h4>
-                  <p class="panel-subtitle">Spotlight the hero pull and supporting cast.</p>
+              <div class="stage-body">
+                <div class="stage-area">
+                  <div class="stage-frame">
+                    <div id="area" class="dropArea"></div>
+                  </div>
                 </div>
-                <div id="summary" class="summary" data-empty="true"></div>
+                <aside class="stage-discard" aria-label="Recent pulls">
+                  <h4 class="stage-label">Recent Pulls</h4>
+                  <div id="discard" class="discard-grid" role="list" data-empty="true"></div>
+                </aside>
               </div>
+            </div>
+            <div class="pack-summary panel">
+              <div class="panel-head">
+                <h3 class="panel-title">Pack Summary</h3>
+                <p class="panel-subtitle">Spotlight the hits and track everything in the stack.</p>
+              </div>
+              <div id="summary" class="summary" role="region" aria-live="polite"></div>
             </div>
             <aside class="panel discard-panel" aria-label="Recent pulls">
               <div class="panel-head">
