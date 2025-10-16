@@ -57,22 +57,12 @@
 
         <section id="page-packs" class="page" aria-labelledby="packsHeading">
           <div class="flow-layout">
-            <aside class="flow-steps" aria-label="How it works">
-              <article class="flow-step">
-                <h4><span class="step-num">1</span>Break the box</h4>
-                <p>Smash the stylized cereal box to reveal a fresh booster pack.</p>
-              </article>
-              <article class="flow-step">
-                <h4><span class="step-num">2</span>Stack &amp; flick</h4>
-                <p>
-                  Cards arrive as a tidy stack. Drag (or use arrow/WASD keys) to tilt the top card, then tap to
-                  discard it into your binder.
-                </p>
-              </article>
-              <article class="flow-step">
-                <h4><span class="step-num">3</span>Summary spread</h4>
-                <p>After the pack empties, review a recap of every pull and keep ripping.</p>
-              </article>
+            <aside class="panel discard-panel" aria-label="Recent pulls">
+              <div class="panel-head">
+                <h4 class="panel-title">Recent Pulls</h4>
+                <p class="panel-subtitle">Showcase each card as it leaves the pack.</p>
+              </div>
+              <div id="discard" class="discard-grid" role="list" data-empty="true"></div>
             </aside>
             <div id="area" class="panel dropArea">
               <div id="progress" class="progress" aria-hidden="true"></div>
