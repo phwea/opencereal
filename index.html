@@ -57,27 +57,32 @@
 
         <section id="page-packs" class="page" aria-labelledby="packsHeading">
           <div class="flow-layout">
-            <aside class="flow-steps" aria-label="How it works">
-              <article class="flow-step">
-                <h4><span class="step-num">1</span>Break the box</h4>
-                <p>Smash the stylized cereal box to reveal a fresh booster pack.</p>
-              </article>
-              <article class="flow-step">
-                <h4><span class="step-num">2</span>Stack &amp; flick</h4>
-                <p>
-                  Cards arrive as a tidy stack. Drag (or use arrow/WASD keys) to tilt the top card, then tap to
-                  discard it into your binder.
-                </p>
-              </article>
-              <article class="flow-step">
-                <h4><span class="step-num">3</span>Summary spread</h4>
-                <p>After the pack empties, review a recap of every pull and keep ripping.</p>
-              </article>
-            </aside>
-            <div id="area" class="panel dropArea">
-              <div id="progress" class="progress" aria-hidden="true"></div>
-              <div id="summary" class="summary" role="dialog" aria-modal="true"></div>
+            <div class="flow-primary">
+              <div class="panel stage-panel" aria-labelledby="packsHeading">
+                <div class="panel-head">
+                  <h3 id="packsHeading" class="panel-title">Pack Opening</h3>
+                  <p class="panel-subtitle">Break the cereal box to launch the stack.</p>
+                </div>
+                <div id="area" class="pack-stage" role="presentation">
+                  <div class="pack-stage__surface" aria-hidden="true"></div>
+                  <div id="progress" class="progress" aria-hidden="true"></div>
+                </div>
+              </div>
+              <div class="panel summary-panel" aria-live="polite">
+                <div class="panel-head">
+                  <h4 class="panel-title">Pack Summary</h4>
+                  <p class="panel-subtitle">Spotlight the hero pull and supporting cast.</p>
+                </div>
+                <div id="summary" class="summary" data-empty="true"></div>
+              </div>
             </div>
+            <aside class="panel discard-panel" aria-label="Recent pulls">
+              <div class="panel-head">
+                <h4 class="panel-title">Recent Pulls</h4>
+                <p class="panel-subtitle">Showcase each card as it leaves the pack.</p>
+              </div>
+              <div id="discard" class="discard-grid" role="list" data-empty="true"></div>
+            </aside>
           </div>
           <div class="cta">
             <button id="btnPrimary" class="btn" type="button">Choose a box first</button>
