@@ -10,6 +10,11 @@ const BOX_BREAK_MS = prefersReducedMotion ? 0 : 420;
 const AUTO_STEP_MS = prefersReducedMotion ? 80 : 420;
 const WAIT_AFTER_BREAK_MS = prefersReducedMotion ? 80 : BOX_BREAK_MS + 160;
 
+const CARD_ROTATION_LIMIT = 32;
+const CARD_ROTATION_SENSITIVITY = 0.28;
+const CARD_ROTATION_KEY_STEP = 5;
+const CARD_ROTATION_RESET_DURATION = 220;
+
 const RARITIES = [
   { key: "1d", label: "1◆", icon: "◆", repeat: 1, cls: "rar-1d", pool: "common" },
   { key: "2d", label: "2◆", icon: "◆", repeat: 2, cls: "rar-2d", pool: "uncommon" },
@@ -88,6 +93,19 @@ const BOXES = {
 /* State                                                                       */
 /* -------------------------------------------------------------------------- */
 
+function createCardRotationState() {
+  return {
+    angleX: 0,
+    angleY: 0,
+    baseAngleX: 0,
+    baseAngleY: 0,
+    originX: 0,
+    originY: 0,
+    pointerId: null,
+    dragging: false
+  };
+}
+
 const state = {
   currentPage: "home",
   currentBox: BOXES.standard,
@@ -97,7 +115,7 @@ const state = {
   opened: 0,
   autoRunning: false,
   autoTimer: null,
-  cardRotation: false
+  cardRotation: createCardRotationState()
 };
 
 /* -------------------------------------------------------------------------- */
@@ -201,6 +219,138 @@ function topTierLabel(box) {
   return RAR_INDEX[key].label;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Card rotation helpers                                                       */
+/* -------------------------------------------------------------------------- */
+
+function resetCardRotationState() {
+  Object.assign(state.cardRotation, createCardRotationState());
+}
+
+function rotationIsActive() {
+  return Math.abs(state.cardRotation.angleX) > 0.01 || Math.abs(state.cardRotation.angleY) > 0.01;
+}
+
+function clampRotationValue(value) {
+  return Math.max(-CARD_ROTATION_LIMIT, Math.min(CARD_ROTATION_LIMIT, value));
+}
+
+function applyRotationToCard(card, mode = "instant") {
+  if (!card) return;
+
+  if (mode === "drag") {
+    card.style.transition = "transform 0s";
+  } else if (mode === "smooth") {
+    card.style.transition = "transform 0.22s ease-out";
+  } else {
+    card.style.transition = "";
+  }
+
+  const { angleX, angleY } = state.cardRotation;
+  const hasRotation = Math.abs(angleX) > 0.01 || Math.abs(angleY) > 0.01;
+  card.style.transform = hasRotation ? `rotateX(${angleX}deg) rotateY(${angleY}deg)` : "";
+
+  if (mode === "smooth") {
+    window.setTimeout(() => {
+      if (!state.cardRotation.dragging && card.isConnected && card === getTopCard()) {
+        card.style.transition = "";
+      }
+    }, CARD_ROTATION_RESET_DURATION);
+  }
+}
+
+function setCardRotationAngles(angleX, angleY, mode = "instant") {
+  const clampedX = clampRotationValue(angleX);
+  const clampedY = clampRotationValue(angleY);
+  if (clampedX === state.cardRotation.angleX && clampedY === state.cardRotation.angleY) return;
+
+  state.cardRotation.angleX = clampedX;
+  state.cardRotation.angleY = clampedY;
+  if (!state.cardRotation.dragging) {
+    state.cardRotation.baseAngleX = clampedX;
+    state.cardRotation.baseAngleY = clampedY;
+  }
+
+  const card = getTopCard();
+  applyRotationToCard(card, mode);
+}
+
+function resetTopCardRotation({ animate = false } = {}) {
+  const card = getTopCard();
+  const shouldAnimate = animate && rotationIsActive();
+  resetCardRotationState();
+  if (card) {
+    applyRotationToCard(card, shouldAnimate ? "smooth" : "instant");
+  }
+}
+
+function nudgeCardRotation(deltaX, deltaY) {
+  const card = getTopCard();
+  if (!card) return;
+  if (btnRotate.disabled) return;
+  if (!state.pack) return;
+  setCardRotationAngles(state.cardRotation.angleX + deltaX, state.cardRotation.angleY + deltaY, "smooth");
+}
+
+function handleCardPointerDown(event, card) {
+  if (!state.pack) return;
+  if (card !== getTopCard()) return;
+  if (btnRotate.disabled) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+
+  state.cardRotation.dragging = true;
+  state.cardRotation.pointerId = event.pointerId;
+  state.cardRotation.originX = event.clientX;
+  state.cardRotation.originY = event.clientY;
+  state.cardRotation.baseAngleX = state.cardRotation.angleX;
+  state.cardRotation.baseAngleY = state.cardRotation.angleY;
+
+  if (card.setPointerCapture) {
+    card.setPointerCapture(event.pointerId);
+  }
+  applyRotationToCard(card, "drag");
+  event.preventDefault();
+}
+
+function handleCardPointerMove(event, card) {
+  if (!state.cardRotation.dragging) return;
+  if (state.cardRotation.pointerId !== event.pointerId) return;
+  if (btnRotate.disabled) return;
+  if (!state.pack) return;
+
+  const deltaX = event.clientX - state.cardRotation.originX;
+  const deltaY = event.clientY - state.cardRotation.originY;
+  const nextAngleX = state.cardRotation.baseAngleX - deltaY * CARD_ROTATION_SENSITIVITY;
+  const nextAngleY = state.cardRotation.baseAngleY + deltaX * CARD_ROTATION_SENSITIVITY;
+  setCardRotationAngles(nextAngleX, nextAngleY, "drag");
+}
+
+function endCardPointerInteraction(card) {
+  state.cardRotation.dragging = false;
+  state.cardRotation.pointerId = null;
+  state.cardRotation.originX = 0;
+  state.cardRotation.originY = 0;
+  state.cardRotation.baseAngleX = state.cardRotation.angleX;
+  state.cardRotation.baseAngleY = state.cardRotation.angleY;
+  card.style.transition = "";
+}
+
+function handleCardPointerUp(event, card) {
+  if (state.cardRotation.pointerId !== event.pointerId) return;
+  if (card.hasPointerCapture && card.hasPointerCapture(event.pointerId) && card.releasePointerCapture) {
+    card.releasePointerCapture(event.pointerId);
+  }
+  endCardPointerInteraction(card);
+}
+
+function handleCardPointerCancel(event, card) {
+  if (state.cardRotation.pointerId !== event.pointerId) return;
+  if (card.hasPointerCapture && card.hasPointerCapture(event.pointerId) && card.releasePointerCapture) {
+    card.releasePointerCapture(event.pointerId);
+  }
+  endCardPointerInteraction(card);
+}
+
 function ensurePacksTabEnabled() {
   const packsTab = document.querySelector('.tab[data-page="packs"]');
   if (packsTab) {
@@ -218,16 +368,10 @@ function updatePrimary(label, disabled) {
   btnPrimary.disabled = Boolean(disabled);
 }
 
-function setRotatePressed(on) {
-  btnRotate.setAttribute("aria-pressed", on ? "true" : "false");
-  btnRotate.classList.toggle("active", Boolean(on));
-}
-
 function updateRotateControl(enabled) {
   btnRotate.disabled = !enabled;
   if (!enabled) {
-    state.cardRotation = false;
-    setRotatePressed(false);
+    resetTopCardRotation();
   }
 }
 
@@ -338,7 +482,7 @@ function spawnCenterBox() {
   clearBoard();
   state.pulled = [];
   state.pack = null;
-  state.cardRotation = false;
+  resetCardRotationState();
   buildDots();
 
   const button = document.createElement("button");
@@ -396,8 +540,7 @@ function buildPack() {
   markProgress(-1);
   updatePrimary("Collect Top Card", false);
   updateRotateControl(true);
-  setRotatePressed(false);
-  state.cardRotation = false;
+  resetTopCardRotation();
   window.setTimeout(() => {
     const topCard = getTopCard();
     if (topCard) topCard.focus();
@@ -410,6 +553,7 @@ function createCardElement(result, index) {
   card.className = `card ${rarity.cls}`;
   card.dataset.index = String(index);
   card.style.zIndex = String(800 + index);
+  card.style.touchAction = "none";
   card.innerHTML = `
     <div class="ribbon">${rarity.label}</div>
     <div class="card-icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
@@ -422,11 +566,33 @@ function createCardElement(result, index) {
       handleCardClick(card, result);
       return;
     }
-    if ((event.key === "r" || event.key === "R") && card === getTopCard()) {
+    if (card !== getTopCard()) return;
+    const key = event.key;
+    if (key === "ArrowUp" || key === "w" || key === "W") {
       event.preventDefault();
-      toggleTopCardRotation();
+      nudgeCardRotation(CARD_ROTATION_KEY_STEP, 0);
+      return;
+    }
+    if (key === "ArrowDown" || key === "s" || key === "S") {
+      event.preventDefault();
+      nudgeCardRotation(-CARD_ROTATION_KEY_STEP, 0);
+      return;
+    }
+    if (key === "ArrowLeft" || key === "a" || key === "A") {
+      event.preventDefault();
+      nudgeCardRotation(0, -CARD_ROTATION_KEY_STEP);
+      return;
+    }
+    if (key === "ArrowRight" || key === "d" || key === "D") {
+      event.preventDefault();
+      nudgeCardRotation(0, CARD_ROTATION_KEY_STEP);
     }
   });
+  card.addEventListener("pointerdown", (event) => handleCardPointerDown(event, card));
+  card.addEventListener("pointermove", (event) => handleCardPointerMove(event, card));
+  card.addEventListener("pointerup", (event) => handleCardPointerUp(event, card));
+  card.addEventListener("pointercancel", (event) => handleCardPointerCancel(event, card));
+  card.addEventListener("lostpointercapture", (event) => handleCardPointerCancel(event, card));
   card.tabIndex = 0;
   return card;
 }
@@ -437,10 +603,8 @@ function handleCardClick(card, result) {
   const topCard = getTopCard();
   if (topCard && topCard !== card) return;
 
-  if (state.cardRotation) {
-    card.classList.remove("rotated");
-    state.cardRotation = false;
-    setRotatePressed(false);
+  if (rotationIsActive()) {
+    resetTopCardRotation();
   }
   card.dataset.revealed = "1";
   state.binder[result.key] = (state.binder[result.key] || 0) + 1;
@@ -524,16 +688,6 @@ function showSummary() {
 
   elSummary.classList.add("show");
   renderBinder();
-}
-
-function toggleTopCardRotation() {
-  if (btnRotate.disabled) return;
-  if (!state.pack) return;
-  const card = getTopCard();
-  if (!card) return;
-  const nowRotated = card.classList.toggle("rotated");
-  state.cardRotation = nowRotated;
-  setRotatePressed(nowRotated);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -697,7 +851,11 @@ function wireControls() {
   });
 
   btnRotate.addEventListener("click", () => {
-    toggleTopCardRotation();
+    resetTopCardRotation({ animate: true });
+    const topCard = getTopCard();
+    if (topCard) {
+      topCard.focus();
+    }
   });
 }
 
