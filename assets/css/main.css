@@ -517,6 +517,11 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
+  position: relative;
+}
+
+.discard-panel::before {
+  display: none;
 }
 
 .pack-stage__surface {
@@ -853,6 +858,15 @@ body {
   background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.16), transparent 65%);
   opacity: 0;
   transition: opacity 0.32s ease;
+}
+
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(130deg, rgba(83, 204, 255, 0.18), rgba(255, 95, 162, 0));
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .card > * {
