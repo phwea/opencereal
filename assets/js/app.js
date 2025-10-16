@@ -139,6 +139,8 @@ const boxesGrid = document.getElementById("boxesGrid");
 const goBoxes = document.getElementById("goBoxes");
 const openedEl = document.getElementById("opened");
 
+const STACK_SELECTOR = ".pack-stage__stack";
+
 /* -------------------------------------------------------------------------- */
 /* Persistence                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -248,16 +250,18 @@ function applyRotationToCard(card, mode = "instant") {
   if (!card) return;
 
   if (mode === "drag") {
-    card.style.transition = "transform 0s";
+    card.style.transition = "transform 0s, box-shadow 0.32s ease, filter 0.32s ease";
   } else if (mode === "smooth") {
-    card.style.transition = "transform 0.22s ease-out";
+    card.style.transition = "transform 0.22s ease-out, box-shadow 0.32s ease, filter 0.32s ease";
   } else {
     card.style.transition = "";
   }
 
   const { angleX, angleY } = state.cardRotation;
-  const hasRotation = Math.abs(angleX) > 0.01 || Math.abs(angleY) > 0.01;
-  card.style.transform = hasRotation ? `rotateX(${angleX}deg) rotateY(${angleY}deg)` : "";
+  const tiltX = Math.abs(angleX) > 0.01 ? `${angleX}deg` : "0deg";
+  const tiltY = Math.abs(angleY) > 0.01 ? `${angleY}deg` : "0deg";
+  card.style.setProperty("--tilt-x", tiltX);
+  card.style.setProperty("--tilt-y", tiltY);
 
   if (mode === "smooth") {
     window.setTimeout(() => {
@@ -385,7 +389,7 @@ function updateRotateControl(enabled) {
 }
 
 function hideSummary() {
-  elSummary.classList.remove("show");
+  elSummary.dataset.empty = "true";
   elSummary.innerHTML = "";
 }
 
@@ -534,7 +538,12 @@ function focusCurrentBoxCard() {
 /* -------------------------------------------------------------------------- */
 
 function clearBoard() {
-  elArea.querySelectorAll(".card, .centerBox").forEach((node) => node.remove());
+  elArea.classList.remove("breaking");
+  const stack = getStackElement();
+  if (stack) stack.remove();
+  const boxwrap = elArea.querySelector(".pack-stage__boxwrap");
+  if (boxwrap) boxwrap.remove();
+  elArea.querySelectorAll(".card, .cereal-box").forEach((node) => node.remove());
   elProgress.innerHTML = "";
   hideSummary();
   updateRotateControl(false);
@@ -554,6 +563,30 @@ function markProgress(idx) {
   const dots = [...elProgress.children];
   dots.forEach((dot, index) => {
     dot.classList.toggle("on", index <= idx);
+  });
+}
+
+function getStackElement() {
+  return elArea.querySelector(STACK_SELECTOR);
+}
+
+function restackCards({ immediate = false } = {}) {
+  const stack = getStackElement();
+  if (!stack) return;
+  const cards = [...stack.querySelectorAll(".card")];
+  cards.forEach((card, index) => {
+    const depth = cards.length - index - 1;
+    card.style.setProperty("--stack-offset", depth);
+    card.style.zIndex = String(800 + index);
+    card.classList.toggle("card-top", index === cards.length - 1);
+    if (immediate) {
+      card.classList.add("card-no-transition");
+      requestAnimationFrame(() => {
+        if (card.isConnected) {
+          card.classList.remove("card-no-transition");
+        }
+      });
+    }
   });
 }
 
@@ -615,23 +648,38 @@ function spawnCenterBox() {
   resetDiscardShelf();
   buildDots();
 
+  const stack = document.createElement("div");
+  stack.className = "pack-stage__stack";
+  elArea.appendChild(stack);
+
+  const boxwrap = document.createElement("div");
+  boxwrap.className = "pack-stage__boxwrap";
+
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "centerBox";
+  button.className = "cereal-box";
   button.id = "centerBox";
   button.innerHTML = `
     <span class="visually-hidden">Break ${state.currentBox.title}</span>
-    <div class="cube" aria-hidden="true"></div>
-    <div class="label">${state.currentBox.title}</div>
-    <div class="left" aria-hidden="true"></div>
-    <div class="right" aria-hidden="true"></div>
+    <div class="cereal-box__lid" aria-hidden="true"></div>
+    <div class="cereal-box__body">
+      <div class="cereal-box__cards" aria-hidden="true">
+        <div class="cereal-box__card cereal-box__card--front"></div>
+        <div class="cereal-box__card cereal-box__card--mid"></div>
+        <div class="cereal-box__card cereal-box__card--back"></div>
+      </div>
+      <div class="cereal-box__title">${state.currentBox.emoji} ${state.currentBox.title}</div>
+      <div class="cereal-box__label">${state.currentBox.desc}</div>
+      <div class="cereal-box__badge">Break to reveal · Top ${topTierLabel(state.currentBox)}</div>
+    </div>
   `;
 
   const triggerBreak = () => {
     button.disabled = true;
-    button.classList.add("break");
+    elArea.classList.add("breaking");
     window.setTimeout(() => {
-      button.remove();
+      boxwrap.remove();
+      elArea.classList.remove("breaking");
       buildPack();
     }, BOX_BREAK_MS);
   };
@@ -647,7 +695,8 @@ function spawnCenterBox() {
     }
   });
 
-  elArea.appendChild(button);
+  boxwrap.appendChild(button);
+  elArea.appendChild(boxwrap);
   updatePrimary("Break Box", false);
   updateRotateControl(false);
   window.setTimeout(() => button.focus(), 20);
@@ -660,11 +709,17 @@ function buildPack() {
   });
 
   state.pack = { results, index: 0 };
-  elArea.querySelectorAll(".card").forEach((node) => node.remove());
+  const stack = getStackElement() || (() => {
+    const created = document.createElement("div");
+    created.className = "pack-stage__stack";
+    elArea.appendChild(created);
+    return created;
+  })();
+  stack.querySelectorAll(".card").forEach((node) => node.remove());
 
   results.forEach((result, index) => {
     const card = createCardElement(result, index);
-    elArea.appendChild(card);
+    stack.appendChild(card);
     if (!prefersReducedMotion) {
       requestAnimationFrame(() => {
         card.classList.add("card-enter--show");
@@ -677,6 +732,7 @@ function buildPack() {
     }
   });
 
+  restackCards({ immediate: true });
   markProgress(-1);
   updatePrimary("Collect Top Card", false);
   updateRotateControl(true);
@@ -694,6 +750,9 @@ function createCardElement(result, index) {
   card.dataset.index = String(index);
   card.style.zIndex = String(800 + index);
   card.style.touchAction = "none";
+  card.style.setProperty("--stack-offset", "0");
+  card.style.setProperty("--tilt-x", "0deg");
+  card.style.setProperty("--tilt-y", "0deg");
   card.innerHTML = `
     <div class="ribbon">${rarity.label}</div>
     <div class="card-icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
@@ -755,6 +814,7 @@ function handleCardClick(card, result) {
   window.setTimeout(() => {
     addDiscardCard(result);
     card.remove();
+    restackCards();
     if (!state.pack) return;
     state.pack.index += 1;
     markProgress(state.pack.index - 1);
@@ -786,9 +846,7 @@ function finishPack() {
 
 function showSummary() {
   elSummary.innerHTML = "";
-  const heading = document.createElement("h4");
-  heading.textContent = "Pack Summary";
-  elSummary.appendChild(heading);
+  elSummary.dataset.empty = "false";
 
   const hero = state.pulled.reduce((best, item) => {
     if (!best) return item;
@@ -822,8 +880,6 @@ function showSummary() {
   if (list.children.length) {
     elSummary.appendChild(list);
   }
-
-  elSummary.classList.add("show");
   renderBinder();
 }
 
@@ -843,7 +899,7 @@ function scheduleAutoStep(delay = AUTO_STEP_MS) {
       activate("packs");
     }
 
-    if (elSummary.classList.contains("show")) {
+    if (elSummary.dataset.empty !== "true") {
       hideSummary();
       spawnCenterBox();
       scheduleAutoStep(AUTO_STEP_MS);
@@ -967,7 +1023,7 @@ function wireControls() {
   });
 
   btnPrimary.addEventListener("click", () => {
-    if (elSummary.classList.contains("show")) {
+    if (elSummary.dataset.empty !== "true") {
       hideSummary();
       spawnCenterBox();
       return;
@@ -1021,6 +1077,7 @@ function init() {
   }
   updatePrimary("Choose a box first", true);
   updateRotateControl(false);
+  hideSummary();
   updateHeader("home");
 }
 
