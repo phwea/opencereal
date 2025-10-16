@@ -5,7 +5,7 @@
 /* -------------------------------------------------------------------------- */
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const CARD_REVEAL_MS = prefersReducedMotion ? 40 : 420;
+const CARD_REVEAL_MS = prefersReducedMotion ? 40 : 520;
 const BOX_BREAK_MS = prefersReducedMotion ? 0 : 420;
 const AUTO_STEP_MS = prefersReducedMotion ? 80 : 420;
 const WAIT_AFTER_BREAK_MS = prefersReducedMotion ? 80 : BOX_BREAK_MS + 160;
@@ -15,11 +15,13 @@ const CARD_ROTATION_SENSITIVITY = 0.28;
 const CARD_ROTATION_KEY_STEP = 5;
 const CARD_ROTATION_RESET_DURATION = 220;
 
+const DIAMOND_SYMBOL = "⬦";
+
 const RARITIES = [
-  { key: "1d", label: "1◆", icon: "◆", repeat: 1, cls: "rar-1d", pool: "common" },
-  { key: "2d", label: "2◆", icon: "◆", repeat: 2, cls: "rar-2d", pool: "uncommon" },
-  { key: "3d", label: "3◆", icon: "◆", repeat: 3, cls: "rar-3d", pool: "rare" },
-  { key: "4d", label: "4◆", icon: "◆", repeat: 4, cls: "rar-4d", pool: "ex" },
+  { key: "1d", label: DIAMOND_SYMBOL, icon: DIAMOND_SYMBOL, repeat: 1, cls: "rar-1d", pool: "common" },
+  { key: "2d", label: DIAMOND_SYMBOL.repeat(2), icon: DIAMOND_SYMBOL, repeat: 2, cls: "rar-2d", pool: "uncommon" },
+  { key: "3d", label: DIAMOND_SYMBOL.repeat(3), icon: DIAMOND_SYMBOL, repeat: 3, cls: "rar-3d", pool: "rare" },
+  { key: "4d", label: DIAMOND_SYMBOL.repeat(4), icon: DIAMOND_SYMBOL, repeat: 4, cls: "rar-4d", pool: "ex" },
   { key: "1s", label: "1★", icon: "★", repeat: 1, cls: "rar-1s", pool: "illustration" },
   { key: "2s", label: "2★", icon: "★", repeat: 2, cls: "rar-2s", pool: "special" },
   { key: "3s", label: "3★", icon: "★", repeat: 3, cls: "rar-3s", pool: "immersive" },
@@ -128,6 +130,7 @@ const elSubtitle = document.getElementById("subtitle");
 const elArea = document.getElementById("area");
 const elProgress = document.getElementById("progress");
 const elSummary = document.getElementById("summary");
+const elDiscard = document.getElementById("discard");
 const elBinder = document.getElementById("binder");
 const btnPrimary = document.getElementById("btnPrimary");
 const btnAuto = document.getElementById("btnAuto");
@@ -163,25 +166,31 @@ function loadPersistedState() {
   try {
     const raw = localStorage.getItem(LS_STATE);
     if (!raw) {
-      return { binder: ensureBinderDefaults({}), opened: 0 };
+      return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
     }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return { binder: ensureBinderDefaults({}), opened: 0 };
+      return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
     }
+    const boxKey = typeof parsed.boxKey === "string" && BOXES[parsed.boxKey] ? parsed.boxKey : state.currentBox.key;
     return {
       binder: ensureBinderDefaults(parsed.binder),
-      opened: Number.isFinite(parsed.opened) && parsed.opened >= 0 ? parsed.opened : 0
+      opened: Number.isFinite(parsed.opened) && parsed.opened >= 0 ? parsed.opened : 0,
+      boxKey
     };
   } catch (error) {
     console.warn("Failed to read saved state", error);
-    return { binder: ensureBinderDefaults({}), opened: 0 };
+    return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
   }
 }
 
 function savePersistedState() {
   try {
-    const payload = { binder: state.binder, opened: state.opened };
+    const payload = {
+      binder: state.binder,
+      opened: state.opened,
+      boxKey: state.currentBox && state.currentBox.key ? state.currentBox.key : null
+    };
     localStorage.setItem(LS_STATE, JSON.stringify(payload));
   } catch (error) {
     console.warn("Failed to save state", error);
@@ -410,7 +419,9 @@ function selectBoxHelper(key, { animate = false, focus = false, open = false } =
   if (!key) return null;
   const card = boxesGrid.querySelector(`.boxCard[data-key="${key}"]`);
   boxesGrid.querySelectorAll(".boxCard").forEach((node) => {
-    node.classList.toggle("selected", node === card);
+    const isSelected = node === card;
+    node.classList.toggle("selected", isSelected);
+    node.setAttribute("aria-pressed", isSelected ? "true" : "false");
   });
 
   if (!card) return null;
@@ -440,6 +451,7 @@ function renderBoxes() {
     card.className = "boxCard";
     card.type = "button";
     card.dataset.key = box.key;
+    card.setAttribute("aria-pressed", "false");
     card.innerHTML = `
       <div class="boxTop"><div class="boxEmoji" aria-hidden="true">${box.emoji}</div></div>
       <div class="boxTitle">${box.title}</div>
@@ -452,6 +464,41 @@ function renderBoxes() {
 
     card.addEventListener("click", () => {
       selectBoxHelper(box.key, { animate: true, open: true, focus: false });
+    });
+
+    card.addEventListener("keydown", (event) => {
+      const { key } = event;
+      if (key === "Enter" || key === " ") {
+        event.preventDefault();
+        selectBoxHelper(box.key, { animate: true, open: true, focus: false });
+        return;
+      }
+      const cards = [...boxesGrid.querySelectorAll(".boxCard")];
+      const index = cards.indexOf(card);
+      if (index === -1) return;
+      if (key === "ArrowRight" || key === "ArrowDown") {
+        event.preventDefault();
+        const next = cards[(index + 1) % cards.length];
+        if (next) next.focus();
+        return;
+      }
+      if (key === "ArrowLeft" || key === "ArrowUp") {
+        event.preventDefault();
+        const prev = cards[(index - 1 + cards.length) % cards.length];
+        if (prev) prev.focus();
+        return;
+      }
+      if (key === "Home") {
+        event.preventDefault();
+        const first = cards[0];
+        if (first) first.focus();
+        return;
+      }
+      if (key === "End") {
+        event.preventDefault();
+        const last = cards[cards.length - 1];
+        if (last) last.focus();
+      }
     });
 
     boxesGrid.appendChild(card);
@@ -473,6 +520,13 @@ function setBox(key) {
   if (state.currentPage === "packs") {
     updateHeader("packs");
   }
+  savePersistedState();
+}
+
+function focusCurrentBoxCard() {
+  const selected = boxesGrid.querySelector(".boxCard.selected") || boxesGrid.querySelector(".boxCard");
+  if (!selected) return;
+  window.setTimeout(() => selected.focus(), 20);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -503,11 +557,62 @@ function markProgress(idx) {
   });
 }
 
+function resetDiscardShelf() {
+  if (!elDiscard) return;
+  elDiscard.innerHTML = "";
+  elDiscard.dataset.empty = "true";
+}
+
+function addDiscardCard(result) {
+  if (!elDiscard) return;
+  const rarity = RAR_INDEX[result.key];
+  const card = document.createElement("div");
+  card.className = `discard-card ${rarity.cls}`;
+  card.setAttribute("role", "listitem");
+  card.innerHTML = `
+    <div class="rarity">${rarity.label}</div>
+    <div class="icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
+    <div class="name">${result.name}</div>
+  `;
+  elDiscard.dataset.empty = "false";
+  elDiscard.prepend(card);
+  const max = 6;
+  while (elDiscard.children.length > max) {
+    elDiscard.lastElementChild.remove();
+  }
+}
+
+function animateCardToDiscard(card) {
+  if (!card) return;
+  if (prefersReducedMotion) {
+    card.style.opacity = "0";
+    return;
+  }
+  const discardRect = elDiscard ? elDiscard.getBoundingClientRect() : null;
+  const cardRect = card.getBoundingClientRect();
+  let translateX = elArea.clientWidth * 0.35;
+  let translateY = -20;
+  let rotate = 6;
+  if (discardRect) {
+    const targetX = discardRect.left + discardRect.width / 2;
+    const targetY = discardRect.top + Math.min(discardRect.height, 240) * 0.35;
+    const currentX = cardRect.left + cardRect.width / 2;
+    const currentY = cardRect.top + cardRect.height / 2;
+    translateX = targetX - currentX;
+    translateY = targetY - currentY;
+    rotate = -12;
+  }
+  card.style.transition = `transform ${CARD_REVEAL_MS}ms cubic-bezier(.22,1,.36,1), opacity ${CARD_REVEAL_MS}ms ease`;
+  card.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${rotate}deg) scale(0.8)`;
+  card.style.opacity = "0";
+}
+
 function spawnCenterBox() {
   clearBoard();
   state.pulled = [];
   state.pack = null;
   resetCardRotationState();
+  resetDiscardShelf();
   buildDots();
 
   const button = document.createElement("button");
@@ -560,6 +665,16 @@ function buildPack() {
   results.forEach((result, index) => {
     const card = createCardElement(result, index);
     elArea.appendChild(card);
+    if (!prefersReducedMotion) {
+      requestAnimationFrame(() => {
+        card.classList.add("card-enter--show");
+        window.setTimeout(() => {
+          card.classList.remove("card-enter", "card-enter--show");
+        }, CARD_REVEAL_MS + 120);
+      });
+    } else {
+      card.classList.remove("card-enter");
+    }
   });
 
   markProgress(-1);
@@ -575,7 +690,7 @@ function buildPack() {
 function createCardElement(result, index) {
   const rarity = RAR_INDEX[result.key];
   const card = document.createElement("div");
-  card.className = `card ${rarity.cls}`;
+  card.className = `card ${rarity.cls} card-enter`;
   card.dataset.index = String(index);
   card.style.zIndex = String(800 + index);
   card.style.touchAction = "none";
@@ -635,13 +750,10 @@ function handleCardClick(card, result) {
   state.binder[result.key] = (state.binder[result.key] || 0) + 1;
   state.pulled.push({ key: result.key, name: result.name });
 
-  if (!prefersReducedMotion) {
-    card.style.transition = "transform 0.42s cubic-bezier(.2,.8,.2,1), opacity 0.42s ease";
-    card.style.transform = `translate(calc(50% + ${elArea.clientWidth * 0.35}px), -20%) rotate(6deg) scale(.84)`;
-    card.style.opacity = "0";
-  }
+  animateCardToDiscard(card);
 
   window.setTimeout(() => {
+    addDiscardCard(result);
     card.remove();
     if (!state.pack) return;
     state.pack.index += 1;
@@ -839,6 +951,10 @@ function wireNav() {
       activate(page);
       if (page === "packs" && !elArea.querySelector(".card, #centerBox")) {
         spawnCenterBox();
+        return;
+      }
+      if (page === "boxes") {
+        focusCurrentBoxCard();
       }
     });
   });
@@ -847,6 +963,7 @@ function wireNav() {
 function wireControls() {
   goBoxes.addEventListener("click", () => {
     activate("boxes");
+    focusCurrentBoxCard();
   });
 
   btnPrimary.addEventListener("click", () => {
@@ -894,10 +1011,14 @@ function init() {
   state.opened = saved.opened;
   openedEl.textContent = state.opened;
   renderBinder();
-  renderBoxes();
+  const selectBox = renderBoxes();
   wireNav();
   wireControls();
   ensurePacksTabEnabled();
+  const defaultBoxKey = saved.boxKey && BOXES[saved.boxKey] ? saved.boxKey : state.currentBox.key;
+  if (typeof selectBox === "function") {
+    selectBox(defaultBoxKey, { focus: false, animate: false });
+  }
   updatePrimary("Choose a box first", true);
   updateRotateControl(false);
   updateHeader("home");
