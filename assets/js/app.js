@@ -15,11 +15,13 @@ const CARD_ROTATION_SENSITIVITY = 0.28;
 const CARD_ROTATION_KEY_STEP = 5;
 const CARD_ROTATION_RESET_DURATION = 220;
 
+const DIAMOND_SYMBOL = "⬦";
+
 const RARITIES = [
-  { key: "1d", label: "1◆", icon: "◆", repeat: 1, cls: "rar-1d", pool: "common" },
-  { key: "2d", label: "2◆", icon: "◆", repeat: 2, cls: "rar-2d", pool: "uncommon" },
-  { key: "3d", label: "3◆", icon: "◆", repeat: 3, cls: "rar-3d", pool: "rare" },
-  { key: "4d", label: "4◆", icon: "◆", repeat: 4, cls: "rar-4d", pool: "ex" },
+  { key: "1d", label: DIAMOND_SYMBOL, icon: DIAMOND_SYMBOL, repeat: 1, cls: "rar-1d", pool: "common" },
+  { key: "2d", label: DIAMOND_SYMBOL.repeat(2), icon: DIAMOND_SYMBOL, repeat: 2, cls: "rar-2d", pool: "uncommon" },
+  { key: "3d", label: DIAMOND_SYMBOL.repeat(3), icon: DIAMOND_SYMBOL, repeat: 3, cls: "rar-3d", pool: "rare" },
+  { key: "4d", label: DIAMOND_SYMBOL.repeat(4), icon: DIAMOND_SYMBOL, repeat: 4, cls: "rar-4d", pool: "ex" },
   { key: "1s", label: "1★", icon: "★", repeat: 1, cls: "rar-1s", pool: "illustration" },
   { key: "2s", label: "2★", icon: "★", repeat: 2, cls: "rar-2s", pool: "special" },
   { key: "3s", label: "3★", icon: "★", repeat: 3, cls: "rar-3s", pool: "immersive" },
