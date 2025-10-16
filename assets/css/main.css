@@ -819,6 +819,13 @@ body {
 }
 
 .card {
+  --stack-offset: 0;
+  --stack-shift-x: calc(var(--stack-offset) * -18px);
+  --stack-shift-y: calc(var(--stack-offset) * 22px);
+  --stack-shift-z: calc(var(--stack-offset) * -46px);
+  --stack-rotate: calc(var(--stack-offset) * -1.1deg);
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
   position: absolute;
   width: 220px;
   height: 300px;
@@ -834,6 +841,9 @@ body {
   overflow: hidden;
   transform-origin: center;
   transform-style: preserve-3d;
+  transform: translate3d(calc(-50% + var(--stack-shift-x)), calc(-50% + var(--stack-shift-y)), var(--stack-shift-z))
+    rotate(var(--stack-rotate)) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transition: transform 0.36s cubic-bezier(.2, .8, .2, 1), box-shadow 0.32s ease, filter 0.32s ease;
   will-change: transform;
   opacity: 1;
   --stack-x: 0px;
@@ -854,7 +864,25 @@ body {
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.12), rgba(255, 95, 162, 0.18));
   clip-path: polygon(8% 0%, 92% 0%, 100% 18%, 90% 100%, 12% 100%, 0% 26%);
   pointer-events: none;
-  z-index: 0;
+}
+
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.16), transparent 65%);
+  opacity: 0;
+  transition: opacity 0.32s ease;
+}
+
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(130deg, rgba(83, 204, 255, 0.18), rgba(255, 95, 162, 0));
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .card::after {
@@ -895,7 +923,7 @@ body {
 
 .card:focus-visible {
   outline: 3px solid rgba(255, 255, 255, 0.75);
-  outline-offset: 4px;
+  outline-offset: 5px;
 }
 
 .card .ribbon {
@@ -930,13 +958,21 @@ body {
   gap: 16px;
 }
 
-.summary.show {
-  display: flex;
+.summary[data-empty="true"] {
+  min-height: 164px;
+  align-content: center;
+  color: rgba(255, 255, 255, 0.65);
 }
 
-.summary h4 {
-  margin: 0;
-  font-size: 18px;
+.summary[data-empty="true"]::before {
+  content: "Break open a box to populate the summary.";
+  font-size: 14px;
+  line-height: 1.6;
+  background: rgba(12, 10, 44, 0.6);
+  border: 1px dashed rgba(255, 214, 153, 0.38);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  text-align: center;
 }
 
 .summary-hero {
@@ -948,6 +984,7 @@ body {
   border: 1px solid rgba(255, 158, 95, 0.32);
   position: relative;
   overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .summary-hero::after {
@@ -997,6 +1034,7 @@ body {
 
 .summary-list .rar {
   font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 @keyframes stackFloat {
@@ -1140,8 +1178,10 @@ body {
   100% {
     transform: translateY(-6px);
   }
-  50% {
-    transform: translateY(6px);
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
@@ -1179,16 +1219,6 @@ body {
 
   .cta {
     flex-direction: column;
-  }
-
-  .centerBox {
-    width: 160px;
-    height: 160px;
-  }
-
-  .card {
-    width: 160px;
-    height: 220px;
   }
 }
 

@@ -143,6 +143,8 @@ const boxesGrid = document.getElementById("boxesGrid");
 const goBoxes = document.getElementById("goBoxes");
 const openedEl = document.getElementById("opened");
 
+const STACK_SELECTOR = ".pack-stage__stack";
+
 /* -------------------------------------------------------------------------- */
 /* Persistence                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -252,9 +254,9 @@ function applyRotationToCard(card, mode = "instant") {
   if (!card) return;
 
   if (mode === "drag") {
-    card.style.transition = "transform 0s";
+    card.style.transition = "transform 0s, box-shadow 0.32s ease, filter 0.32s ease";
   } else if (mode === "smooth") {
-    card.style.transition = "transform 0.22s ease-out";
+    card.style.transition = "transform 0.22s ease-out, box-shadow 0.32s ease, filter 0.32s ease";
   } else {
     card.style.transition = "";
   }
@@ -389,7 +391,7 @@ function updateRotateControl(enabled) {
 }
 
 function hideSummary() {
-  elSummary.classList.remove("show");
+  elSummary.dataset.empty = "true";
   elSummary.innerHTML = "";
 }
 
@@ -538,7 +540,12 @@ function focusCurrentBoxCard() {
 /* -------------------------------------------------------------------------- */
 
 function clearBoard() {
-  elArea.querySelectorAll(".card, .centerBox").forEach((node) => node.remove());
+  elArea.classList.remove("breaking");
+  const stack = getStackElement();
+  if (stack) stack.remove();
+  const boxwrap = elArea.querySelector(".pack-stage__boxwrap");
+  if (boxwrap) boxwrap.remove();
+  elArea.querySelectorAll(".card, .cereal-box").forEach((node) => node.remove());
   elProgress.innerHTML = "";
   hideSummary();
   updateRotateControl(false);
@@ -635,9 +642,16 @@ function spawnCenterBox() {
   resetDiscardShelf();
   buildDots();
 
+  const stack = document.createElement("div");
+  stack.className = "pack-stage__stack";
+  elArea.appendChild(stack);
+
+  const boxwrap = document.createElement("div");
+  boxwrap.className = "pack-stage__boxwrap";
+
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "centerBox";
+  button.className = "cereal-box";
   button.id = "centerBox";
   button.innerHTML = `
     <span class="visually-hidden">Break ${state.currentBox.title}</span>
@@ -658,9 +672,10 @@ function spawnCenterBox() {
 
   const triggerBreak = () => {
     button.disabled = true;
-    button.classList.add("break");
+    elArea.classList.add("breaking");
     window.setTimeout(() => {
-      button.remove();
+      boxwrap.remove();
+      elArea.classList.remove("breaking");
       buildPack();
     }, BOX_BREAK_MS);
   };
@@ -676,7 +691,8 @@ function spawnCenterBox() {
     }
   });
 
-  elArea.appendChild(button);
+  boxwrap.appendChild(button);
+  elArea.appendChild(boxwrap);
   updatePrimary("Break Box", false);
   updateRotateControl(false);
   window.setTimeout(() => button.focus(), 20);
@@ -689,7 +705,13 @@ function buildPack() {
   });
 
   state.pack = { results, index: 0 };
-  elArea.querySelectorAll(".card").forEach((node) => node.remove());
+  const stack = getStackElement() || (() => {
+    const created = document.createElement("div");
+    created.className = "pack-stage__stack";
+    elArea.appendChild(created);
+    return created;
+  })();
+  stack.querySelectorAll(".card").forEach((node) => node.remove());
 
   results.forEach((result, index) => {
     const card = createCardElement(result, index, results.length);
@@ -706,6 +728,7 @@ function buildPack() {
     }
   });
 
+  restackCards({ immediate: true });
   markProgress(-1);
   updatePrimary("Collect Top Card", false);
   updateRotateControl(true);
@@ -859,8 +882,6 @@ function showSummary() {
   if (list.children.length) {
     elSummary.appendChild(list);
   }
-
-  elSummary.classList.add("show");
   renderBinder();
 }
 
@@ -880,7 +901,7 @@ function scheduleAutoStep(delay = AUTO_STEP_MS) {
       activate("packs");
     }
 
-    if (elSummary.classList.contains("show")) {
+    if (elSummary.dataset.empty !== "true") {
       hideSummary();
       spawnCenterBox();
       scheduleAutoStep(AUTO_STEP_MS);
@@ -1004,7 +1025,7 @@ function wireControls() {
   });
 
   btnPrimary.addEventListener("click", () => {
-    if (elSummary.classList.contains("show")) {
+    if (elSummary.dataset.empty !== "true") {
       hideSummary();
       spawnCenterBox();
       return;
@@ -1058,6 +1079,7 @@ function init() {
   }
   updatePrimary("Choose a box first", true);
   updateRotateControl(false);
+  hideSummary();
   updateHeader("home");
 }
 
