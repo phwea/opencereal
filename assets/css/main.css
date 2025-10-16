@@ -300,7 +300,11 @@ body {
   gap: 12px;
 }
 
-.hero-kicker {
+.hero-box__edge--right {
+  right: 22px;
+}
+
+.hero-box__badge {
   font-size: 12px;
   letter-spacing: 0.3em;
   text-transform: uppercase;

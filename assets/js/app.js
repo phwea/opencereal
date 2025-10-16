@@ -283,11 +283,13 @@ function renderBoxes() {
       setBox(box.key);
       activate("packs");
       spawnCenterBox();
-      animateBoxSelection(card);
     });
 
     boxesGrid.appendChild(card);
   });
+
+  renderBoxes.selectBox = selectBoxHelper;
+  return selectBoxHelper;
 }
 
 function animateBoxSelection(card) {
