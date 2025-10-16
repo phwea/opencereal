@@ -25,7 +25,22 @@ const RAR_INDEX = Object.fromEntries(RARITIES.map((rarity) => [rarity.key, rarit
 
 const NAME_ADJ_COMMON = ['Chewy', 'Sunny', 'Rustle', 'Brisk', 'Hollow', 'Misty', 'Snappy', 'Pebbly', 'Crisp', 'Breezy'];
 const NAME_ADJ_RARE = ['Luminous', 'Feral', 'Arc', 'Gale', 'Blazing', 'Nebula', 'Auric', 'Prismatic', 'Cryo', 'Volt'];
-const NAME_NOUNS = ['Sprout', 'Pounce', 'Fang', 'Wisp', 'Warden', 'Stride', 'Tide', 'Spark', 'Grove', 'Raptor', 'Echo', 'Gloom', 'Nimbus', 'Rune'];
+const NAME_NOUNS = [
+  'Sprout',
+  'Pounce',
+  'Fang',
+  'Wisp',
+  'Warden',
+  'Stride',
+  'Tide',
+  'Spark',
+  'Grove',
+  'Raptor',
+  'Echo',
+  'Gloom',
+  'Nimbus',
+  'Rune'
+];
 
 const BOXES = {
   mini: {
@@ -97,49 +112,89 @@ const state = {
   opened: 0,
   autoRunning: false,
   autoTimer: null,
-  binder: null
+  binder: {}
 };
 
 /* -------------------------------------------------------------------------- */
-/* Binder helpers                                                             */
+/* Persistence                                                                */
 /* -------------------------------------------------------------------------- */
 
-const LS_BINDER = 'cb_stack_binder_v1';
-const LS_OPENED = 'cb_stack_opened_v1';
+const LS_STATE = 'cb_stack_state_v2';
+const LEGACY_BINDER_KEY = 'cb_stack_binder_v1';
+const LEGACY_OPENED_KEY = 'cb_stack_opened_v1';
 
-function loadBinder() {
+function ensureBinderDefaults(value) {
+  const result = {};
+  if (value && typeof value === 'object') {
+    Object.entries(value).forEach(([key, count]) => {
+      if (Number.isFinite(count) && count >= 0) {
+        result[key] = Math.floor(count);
+      }
+    });
+  }
+  RARITIES.forEach((rarity) => {
+    if (!Number.isFinite(result[rarity.key])) {
+      result[rarity.key] = 0;
+    }
+  });
+  return result;
+}
+
+function loadLegacyBinder() {
   try {
-    return JSON.parse(localStorage.getItem(LS_BINDER)) || {};
+    const raw = localStorage.getItem(LEGACY_BINDER_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch (err) {
-    console.warn('Failed to parse binder data', err);
+    console.warn('Failed to parse legacy binder data', err);
     return {};
   }
 }
 
-function saveBinder(data) {
-  localStorage.setItem(LS_BINDER, JSON.stringify(data));
-}
-
-function loadOpened() {
-  const raw = localStorage.getItem(LS_OPENED);
+function loadLegacyOpened() {
+  const raw = localStorage.getItem(LEGACY_OPENED_KEY);
   const value = Number.parseInt(raw || '0', 10);
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
-function saveOpened(value) {
-  localStorage.setItem(LS_OPENED, String(value));
+function loadPersistedState() {
+  try {
+    const raw = localStorage.getItem(LS_STATE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return {
+          binder: ensureBinderDefaults(parsed.binder),
+          opened: Number.isFinite(parsed.opened) && parsed.opened >= 0 ? parsed.opened : 0
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to parse saved state', err);
+  }
+
+  return {
+    binder: ensureBinderDefaults(loadLegacyBinder()),
+    opened: loadLegacyOpened()
+  };
 }
 
-function initBinder() {
-  state.binder = loadBinder();
-  RARITIES.forEach((rarity) => {
-    if (!(rarity.key in state.binder)) state.binder[rarity.key] = 0;
-  });
-  saveBinder(state.binder);
-  renderBinder();
+function savePersistedState() {
+  try {
+    const payload = {
+      binder: state.binder,
+      opened: state.opened
+    };
+    localStorage.setItem(LS_STATE, JSON.stringify(payload));
+  } catch (err) {
+    console.warn('Failed to persist state', err);
+  }
 }
 
 function renderBinder() {
+  if (!state.binder) return;
+
   elBinder.innerHTML = '';
 
   const wrap = document.createElement('div');
@@ -200,7 +255,7 @@ function getTopCard() {
 
 function updatePrimary(label, disabled) {
   btnPrimary.textContent = label;
-  btnPrimary.disabled = disabled;
+  btnPrimary.disabled = Boolean(disabled);
 }
 
 function hideSummary() {
@@ -249,7 +304,8 @@ function animateBoxSelection(card) {
 
 function setBox(key) {
   state.currentBox = BOXES[key] || BOXES.standard;
-  document.querySelector('.tab[data-page="packs"]').disabled = false;
+  const packsTab = document.querySelector('.tab[data-page="packs"]');
+  if (packsTab) packsTab.disabled = false;
   if (state.currentPage === 'packs') {
     updateHeader('packs');
   }
@@ -282,8 +338,6 @@ function clearBoard() {
   elArea.querySelectorAll('.card, .centerBox').forEach((node) => node.remove());
   elProgress.innerHTML = '';
   hideSummary();
-  elSummary.innerHTML = '';
-  elSummary.classList.remove('show');
 }
 
 function spawnCenterBox() {
@@ -329,6 +383,7 @@ function buildPack() {
   });
 
   markProgress(-1);
+  updatePrimary('Collect Cards', true);
 }
 
 function createCardElement(result, index) {
@@ -357,9 +412,6 @@ function handleCardClick(card, result) {
   card.dataset.revealed = '1';
 
   state.binder[result.key] = (state.binder[result.key] || 0) + 1;
-  saveBinder(state.binder);
-  renderBinder();
-
   state.pulled.push({ key: result.key, name: result.name });
 
   if (!prefersReducedMotion) {
@@ -383,7 +435,7 @@ function finishPack() {
   state.pack = null;
   state.opened += 1;
   openedEl.textContent = state.opened;
-  saveOpened(state.opened);
+  savePersistedState();
   showSummary();
   updatePrimary('Open Another', false);
   if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
@@ -395,7 +447,6 @@ function finishPack() {
 
 function showSummary() {
   hideSummary();
-  elSummary.innerHTML = '';
 
   const wrap = document.createElement('div');
   wrap.className = 'sumCard';
@@ -534,8 +585,8 @@ function activate(page) {
     const el = getPage(key);
     const tab = document.querySelector(`.tab[data-page="${key}"]`);
     const on = key === page;
-    el.classList.toggle('active', on);
-    tab.classList.toggle('active', on);
+    if (el) el.classList.toggle('active', on);
+    if (tab) tab.classList.toggle('active', on);
   });
   if (page !== 'packs') {
     stopAuto();
@@ -614,10 +665,14 @@ function runTests() {
 /* -------------------------------------------------------------------------- */
 
 function init() {
-  state.opened = loadOpened();
+  const persisted = loadPersistedState();
+  state.binder = ensureBinderDefaults(persisted.binder);
+  state.opened = persisted.opened;
   openedEl.textContent = state.opened;
+
   renderBoxes();
-  initBinder();
+  renderBinder();
+
   updatePrimary('Choose a box first', true);
   updateHeader(state.currentPage);
   btnAuto.setAttribute('aria-pressed', 'false');
