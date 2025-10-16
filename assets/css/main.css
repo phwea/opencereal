@@ -462,6 +462,8 @@ body {
   display: grid;
   place-items: center;
   padding: 32px;
+  perspective: 900px;
+  perspective-origin: center 40%;
 }
 
 .flow-layout {
@@ -673,6 +675,8 @@ body {
   transition: transform 0.28s cubic-bezier(.2,.8,.2,1);
   overflow: hidden;
   transform-origin: center;
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .card::before {
@@ -710,11 +714,6 @@ body {
 .card .name {
   font-size: 16px;
   font-weight: 600;
-}
-
-.card.rotated {
-  transform: rotate(-92deg) scale(0.9);
-  box-shadow: 0 26px 48px rgba(0, 0, 0, 0.45);
 }
 
 .cta {
