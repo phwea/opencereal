@@ -1,17 +1,14 @@
-'use strict';
+"use strict";
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const prefersReducedMotion =
-  typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : false;
-
-const MOTION_STEP = prefersReducedMotion ? 80 : 420;
-const BREAK_DELAY = prefersReducedMotion ? 0 : 420;
-const SUMMARY_DELAY = prefersReducedMotion ? 80 : 640;
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CARD_REVEAL_MS = prefersReducedMotion ? 40 : 420;
+const BOX_BREAK_MS = prefersReducedMotion ? 0 : 420;
+const AUTO_STEP_MS = prefersReducedMotion ? 80 : 420;
+const WAIT_AFTER_BREAK_MS = prefersReducedMotion ? 80 : BOX_BREAK_MS + 160;
 
 const RARITIES = [
   { key: '1d', label: '1◆', icon: '◆', repeat: 1, cls: 'rar-1d', pool: 'common' },
@@ -92,18 +89,28 @@ const openedEl = document.getElementById('opened');
 /* State                                                                      */
 /* -------------------------------------------------------------------------- */
 
+const state = {
+  currentPage: 'home',
+  currentBox: BOXES.standard,
+  pack: null,
+  pulled: [],
+  opened: 0,
+  autoRunning: false,
+  autoTimer: null,
+  binder: null
+};
 let opened = 0;
 let currentBox = BOXES.standard;
 let pack = null;
 let pulled = [];
 let autoRunning = false;
-let autoTimer = null;
 
 /* -------------------------------------------------------------------------- */
 /* Binder helpers                                                             */
 /* -------------------------------------------------------------------------- */
 
 const LS_BINDER = 'cb_stack_binder_v1';
+const LS_OPENED = 'cb_stack_opened_v1';
 
 function loadBinder() {
   try {
@@ -118,6 +125,24 @@ function saveBinder(data) {
   localStorage.setItem(LS_BINDER, JSON.stringify(data));
 }
 
+function loadOpened() {
+  const raw = localStorage.getItem(LS_OPENED);
+  const value = Number.parseInt(raw || '0', 10);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function saveOpened(value) {
+  localStorage.setItem(LS_OPENED, String(value));
+}
+
+function initBinder() {
+  state.binder = loadBinder();
+  RARITIES.forEach((rarity) => {
+    if (!(rarity.key in state.binder)) state.binder[rarity.key] = 0;
+  });
+  saveBinder(state.binder);
+  renderBinder();
+}
 const binder = loadBinder();
 RARITIES.forEach((rarity) => {
   if (!(rarity.key in binder)) binder[rarity.key] = 0;
@@ -138,6 +163,7 @@ function renderBinder() {
       cell.setAttribute('role', 'presentation');
       cell.innerHTML = `
         <div>${rarity.icon === '👑' ? '👑' : rarity.icon.repeat(rarity.repeat)}</div>
+        <div class="thumb-count">${state.binder[rarity.key]}</div>
         <div class="thumb-count">${binder[rarity.key]}</div>
       `;
       wrap.appendChild(cell);
@@ -178,6 +204,21 @@ function topTier(box) {
   return RAR_INDEX[keys[keys.length - 1]].label;
 }
 
+function getTopCard() {
+  const cards = [...elArea.querySelectorAll('.card')];
+  return cards.length ? cards[cards.length - 1] : null;
+}
+
+function updatePrimary(label, disabled) {
+  btnPrimary.textContent = label;
+  btnPrimary.disabled = disabled;
+}
+
+function hideSummary() {
+  elSummary.classList.remove('show');
+  elSummary.innerHTML = '';
+}
+
 /* -------------------------------------------------------------------------- */
 /* Boxes UI                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -187,6 +228,7 @@ function renderBoxes() {
   Object.values(BOXES).forEach((box) => {
     const card = document.createElement('button');
     card.className = 'boxCard';
+    card.type = 'button';
     card.dataset.key = box.key;
     card.setAttribute('role', 'listitem');
     card.innerHTML = `
@@ -204,9 +246,6 @@ function renderBoxes() {
       activate('packs');
       spawnCenterBox();
       animateBoxSelection(card);
-      if (autoRunning) {
-        scheduleAutoLoop(MOTION_STEP);
-      }
     });
 
     boxesGrid.appendChild(card);
@@ -216,6 +255,15 @@ function renderBoxes() {
 function animateBoxSelection(card) {
   if (prefersReducedMotion) return;
   card.classList.add('selected');
+  window.setTimeout(() => card.classList.remove('selected'), 420);
+}
+
+function setBox(key) {
+  state.currentBox = BOXES[key] || BOXES.standard;
+  document.querySelector('.tab[data-page="packs"]').disabled = false;
+  if (state.currentPage === 'packs') {
+    updateHeader('packs');
+  }
   setTimeout(() => card.classList.remove('selected'), 420);
 }
 
@@ -224,7 +272,6 @@ function setBox(key) {
   document.querySelector('.tab[data-page="packs"]').disabled = false;
   elTitle.textContent = `Cereal Box — ${currentBox.title}`;
   elSubtitle.textContent = `${currentBox.slots.length} cards • ${currentBox.desc}`;
-  btnPrimary.textContent = 'Break Box';
 }
 
 /* -------------------------------------------------------------------------- */
@@ -233,6 +280,7 @@ function setBox(key) {
 
 function buildDots() {
   elProgress.innerHTML = '';
+  for (let i = 0; i < state.currentBox.slots.length; i += 1) {
   for (let i = 0; i < currentBox.slots.length; i += 1) {
     const dot = document.createElement('div');
     dot.className = 'dot';
@@ -253,33 +301,57 @@ function markProgress(idx) {
 function clearBoard() {
   elArea.querySelectorAll('.card, .centerBox').forEach((node) => node.remove());
   elProgress.innerHTML = '';
+  hideSummary();
   elSummary.innerHTML = '';
   elSummary.classList.remove('show');
-  pack = null;
 }
 
 function spawnCenterBox() {
   clearBoard();
+  state.pulled = [];
+  state.pack = null;
+  buildDots();
   buildDots();
   pulled = [];
+  pack = null;
 
   const container = document.createElement('div');
   container.className = 'centerBox';
   container.id = 'centerBox';
   container.innerHTML = `
     <div class="cube"></div>
+    <div class="label">${state.currentBox.title}</div>
     <div class="label">${currentBox.title}</div>
     <div class="left"></div>
     <div class="right"></div>
   `;
 
   container.addEventListener('click', () => {
-    if (container.classList.contains('break')) return;
     container.classList.add('break');
+    window.setTimeout(() => {
+      container.remove();
+      buildPack();
+    }, BOX_BREAK_MS);
+  });
+
+  elArea.appendChild(container);
+  updatePrimary('Break Box', true);
+}
+
+function buildPack() {
+  const results = state.currentBox.slots.map((slot) => {
+    const key = sampleFromWeights(slot.weights);
+    return { key, name: makeCardName(key) };
+  });
+
+  state.pack = { results, index: 0 };
+
+  results.forEach((result, index) => {
+    const card = createCardElement(result, index);
     setTimeout(() => {
       container.remove();
       buildPack();
-    }, BREAK_DELAY);
+    }, prefersReducedMotion ? 0 : 420);
   });
 
   elArea.appendChild(container);
@@ -306,7 +378,7 @@ function buildPack() {
       <div class="name">${result.name}</div>
     `;
 
-    card.addEventListener('click', () => handleCardClick(card, result), { once: true });
+    card.addEventListener('click', () => handleCardClick(card, result));
 
     elArea.appendChild(card);
   });
@@ -314,6 +386,36 @@ function buildPack() {
   markProgress(-1);
 }
 
+function createCardElement(result, index) {
+  const rarity = RAR_INDEX[result.key];
+  const card = document.createElement('div');
+  card.className = `card ${rarity.cls}`;
+  card.dataset.index = String(index);
+  card.style.zIndex = String(800 + index);
+  card.innerHTML = `
+    <div class="ribbon">${rarity.label}</div>
+    <div class="card-icon">${rarity.icon === '👑' ? '👑' : rarity.icon.repeat(rarity.repeat)}</div>
+    <div class="name">${result.name}</div>
+  `;
+
+  card.addEventListener('click', () => handleCardClick(card, result));
+
+  return card;
+}
+
+function handleCardClick(card, result) {
+  if (!state.pack) return;
+  if (card.dataset.revealed === '1') return;
+  const topCard = getTopCard();
+  if (topCard && topCard !== card) return;
+
+  card.dataset.revealed = '1';
+
+  state.binder[result.key] = (state.binder[result.key] || 0) + 1;
+  saveBinder(state.binder);
+  renderBinder();
+
+  state.pulled.push({ key: result.key, name: result.name });
 function handleCardClick(card, result) {
   binder[result.key] = (binder[result.key] || 0) + 1;
   saveBinder(binder);
@@ -326,6 +428,25 @@ function handleCardClick(card, result) {
     card.style.opacity = '0';
   }
 
+  window.setTimeout(() => {
+    card.remove();
+    if (!state.pack) return;
+    state.pack.index += 1;
+    markProgress(state.pack.index - 1);
+    if (state.pack.index >= state.pack.results.length) {
+      finishPack();
+    }
+  }, CARD_REVEAL_MS);
+}
+
+function finishPack() {
+  state.pack = null;
+  state.opened += 1;
+  openedEl.textContent = state.opened;
+  saveOpened(state.opened);
+  showSummary();
+  updatePrimary('Open Another', false);
+  if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
   setTimeout(() => {
     card.remove();
     if (pack) {
@@ -333,7 +454,7 @@ function handleCardClick(card, result) {
       markProgress(pack.clicks - 1);
       if (pack.clicks >= pack.results.length) finishPack();
     }
-  }, prefersReducedMotion ? 80 : 420);
+  }, prefersReducedMotion ? 40 : 420);
 }
 
 function finishPack() {
@@ -342,10 +463,6 @@ function finishPack() {
   showSummary();
   btnPrimary.textContent = 'Open Another';
   btnPrimary.disabled = false;
-  pack = null;
-  if (autoRunning) {
-    scheduleAutoLoop(SUMMARY_DELAY);
-  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -353,6 +470,7 @@ function finishPack() {
 /* -------------------------------------------------------------------------- */
 
 function showSummary() {
+  hideSummary();
   elSummary.innerHTML = '';
 
   const wrap = document.createElement('div');
@@ -361,6 +479,10 @@ function showSummary() {
   const head = document.createElement('div');
   head.className = 'sumHeader';
   head.innerHTML = `
+    <div class="sumPack">${state.currentBox.emoji}</div>
+    <div>
+      <div class="sumTitle">${state.currentBox.title} — Results</div>
+      <div class="sumSubtitle">${state.pulled.length} cards added to your binder</div>
     <div class="sumPack">${currentBox.emoji}</div>
     <div>
       <div class="sumTitle">${currentBox.title} — Results</div>
@@ -370,6 +492,7 @@ function showSummary() {
 
   const grid = document.createElement('div');
   grid.className = 'sumGrid';
+  state.pulled.forEach((pull) => {
   pulled.forEach((pull) => {
     const rarity = RAR_INDEX[pull.key];
     const thumb = document.createElement('div');
@@ -388,6 +511,11 @@ function showSummary() {
 
   const shelf = document.createElement('button');
   shelf.className = 'ghost';
+  shelf.type = 'button';
+  shelf.textContent = 'Back to Boxes';
+  shelf.addEventListener('click', () => {
+    hideSummary();
+    stopAuto();
   shelf.textContent = 'Back to Boxes';
   shelf.addEventListener('click', () => {
     elSummary.classList.remove('show');
@@ -396,13 +524,16 @@ function showSummary() {
 
   const again = document.createElement('button');
   again.className = 'ok';
+  again.type = 'button';
+  again.textContent = 'Open Another';
+  again.addEventListener('click', () => {
+    hideSummary();
+    spawnCenterBox();
+    if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
   again.textContent = 'Open Another';
   again.addEventListener('click', () => {
     elSummary.classList.remove('show');
     spawnCenterBox();
-    if (autoRunning) {
-      scheduleAutoLoop(MOTION_STEP);
-    }
   });
 
   actions.appendChild(shelf);
@@ -420,74 +551,90 @@ function showSummary() {
 /* Auto Collect                                                               */
 /* -------------------------------------------------------------------------- */
 
+function startAuto() {
+  state.autoRunning = true;
+  btnAuto.textContent = 'Auto: ON';
+  btnAuto.setAttribute('aria-pressed', 'true');
+  activate('packs');
+  scheduleAutoStep(AUTO_STEP_MS);
+}
+
+function stopAuto() {
+  if (!state.autoRunning) return;
+  state.autoRunning = false;
+  btnAuto.textContent = 'Auto Collect';
+  btnAuto.setAttribute('aria-pressed', 'false');
+  if (state.autoTimer) window.clearTimeout(state.autoTimer);
+  state.autoTimer = null;
+}
+
 function toggleAuto() {
-  const packsTab = document.querySelector('.tab[data-page="packs"]');
-  if (!packsTab) return;
-  if (!autoRunning && packsTab.disabled) {
-    return;
+  if (state.autoRunning) {
+    stopAuto();
+  } else {
+    startAuto();
   }
+}
 
-  autoRunning = !autoRunning;
-  btnAuto.textContent = autoRunning ? 'Auto: ON' : 'Auto Collect';
-  if (!autoRunning) {
-    clearAutoTimer();
-    return;
-  }
+function scheduleAutoStep(delay = AUTO_STEP_MS) {
+  if (!state.autoRunning) return;
+  if (state.autoTimer) window.clearTimeout(state.autoTimer);
+  state.autoTimer = window.setTimeout(() => {
+    if (!state.autoRunning) return;
 
-  activate('packs');
-  if (!packsTab.disabled) {
-    if (!document.getElementById('centerBox') && !pack) {
-      spawnCenterBox();
+    if (state.currentPage !== 'packs') {
+      activate('packs');
     }
-    scheduleAutoLoop(MOTION_STEP);
-  }
-}
 
-function clearAutoTimer() {
-  if (autoTimer) {
-    clearTimeout(autoTimer);
-    autoTimer = null;
-  }
-}
+    if (elSummary.classList.contains('show')) {
+      hideSummary();
+      spawnCenterBox();
+      scheduleAutoStep(AUTO_STEP_MS);
+      return;
+    }
 
-function scheduleAutoLoop(delay) {
-  clearAutoTimer();
-  if (!autoRunning) return;
-  autoTimer = setTimeout(() => {
-    if (!autoRunning) return;
-    runAutoLoop();
-  }, delay);
-}
-
-function runAutoLoop() {
-  if (!autoRunning) return;
-
-  activate('packs');
-
-  if (elSummary.classList.contains('show')) {
-    elSummary.classList.remove('show');
-  }
-
-  if (!pack) {
     const center = document.getElementById('centerBox');
     if (center) {
       center.click();
-      scheduleAutoLoop(BREAK_DELAY + MOTION_STEP);
+      scheduleAutoStep(WAIT_AFTER_BREAK_MS);
       return;
     }
+
+    const topCard = getTopCard();
+    if (topCard) {
+      topCard.click();
+      scheduleAutoStep(CARD_REVEAL_MS);
+      return;
+    }
+
     spawnCenterBox();
-    scheduleAutoLoop(MOTION_STEP);
-    return;
-  }
+    scheduleAutoStep(AUTO_STEP_MS);
+  }, delay);
+function autoStepPack() {
+  const step = () => {
+    const list = [...document.querySelectorAll('.card')];
+    if (list.length === 0) return;
+    list[list.length - 1].click();
+    if (autoRunning) {
+      setTimeout(step, prefersReducedMotion ? 80 : 420);
+    }
+  };
+  step();
+}
 
-  const cards = [...document.querySelectorAll('.card')];
-  if (cards.length) {
-    cards[cards.length - 1].click();
-    scheduleAutoLoop(MOTION_STEP);
-    return;
+function toggleAuto() {
+  autoRunning = !autoRunning;
+  btnAuto.textContent = autoRunning ? 'Auto: ON' : 'Auto Collect';
+  if (autoRunning) {
+    if (!document.getElementById('centerBox')) {
+      spawnCenterBox();
+    }
+    setTimeout(() => {
+      const center = document.getElementById('centerBox');
+      if (center) center.click();
+      setTimeout(() => autoStepPack(), prefersReducedMotion ? 80 : 480);
+    }, prefersReducedMotion ? 0 : 160);
   }
-
-  // No cards left but pack exists; wait for finishPack to fire scheduleAutoLoop.
 }
 
 /* -------------------------------------------------------------------------- */
@@ -495,6 +642,7 @@ function runAutoLoop() {
 /* -------------------------------------------------------------------------- */
 
 function activate(page) {
+  state.currentPage = page;
   ['home', 'boxes', 'packs', 'binder'].forEach((key) => {
     const el = getPage(key);
     const tab = document.querySelector(`.tab[data-page="${key}"]`);
@@ -502,6 +650,9 @@ function activate(page) {
     el.classList.toggle('active', on);
     tab.classList.toggle('active', on);
   });
+  if (page !== 'packs') {
+    stopAuto();
+  }
   updateHeader(page);
 }
 
@@ -509,12 +660,14 @@ function updateHeader(page) {
   const names = {
     home: 'Home',
     boxes: 'Boxes',
+    packs: `${state.currentBox.title}`,
     packs: `${currentBox.title}`,
     binder: 'Binder'
   };
   elTitle.textContent = `Cereal Box — ${names[page]}`;
   elSubtitle.textContent =
     page === 'packs'
+      ? state.currentBox.desc
       ? `${currentBox.slots.length} cards • ${currentBox.desc}`
       : page === 'boxes'
       ? 'Pick a box. Each has different slots and odds.'
@@ -552,6 +705,9 @@ function runTests() {
   setBox('standard');
   spawnCenterBox();
   document.getElementById('centerBox').click();
+  window.setTimeout(() => {
+    const list = [...document.querySelectorAll('.card')];
+    ok('All cards overlapped', list.length === state.currentBox.slots.length);
   setTimeout(() => {
     const list = [...document.querySelectorAll('.card')];
     ok('All cards overlapped', list.length === currentBox.slots.length);
@@ -561,6 +717,14 @@ function runTests() {
       if (!live.length) return;
       live[live.length - 1].click();
       i += 1;
+      if (i < state.currentBox.slots.length) window.setTimeout(go, CARD_REVEAL_MS + 60);
+    };
+    go();
+    window.setTimeout(() => {
+      ok('Summary shown', document.getElementById('summary').classList.contains('show'));
+      alert(logs.join('\n'));
+    }, (CARD_REVEAL_MS + 60) * state.currentBox.slots.length + 600);
+  }, BOX_BREAK_MS + 120);
       if (i < currentBox.slots.length) setTimeout(go, 480);
     };
     go();
@@ -575,6 +739,33 @@ function runTests() {
 /* Init                                                                       */
 /* -------------------------------------------------------------------------- */
 
+function init() {
+  state.opened = loadOpened();
+  openedEl.textContent = state.opened;
+  renderBoxes();
+  initBinder();
+  updatePrimary('Choose a box first', true);
+  updateHeader(state.currentPage);
+  btnAuto.setAttribute('aria-pressed', 'false');
+
+  document.querySelectorAll('.tab').forEach((tab) =>
+    tab.addEventListener('click', () => {
+      if (tab.disabled) return;
+      activate(tab.dataset.page);
+    })
+  );
+
+  goBoxes.addEventListener('click', () => activate('boxes'));
+  btnPrimary.addEventListener('click', () => {
+    if (btnPrimary.disabled) return;
+    spawnCenterBox();
+  });
+  btnAuto.addEventListener('click', () => toggleAuto());
+
+  window.runTests = runTests;
+}
+
+init();
 renderBoxes();
 renderBinder();
 
