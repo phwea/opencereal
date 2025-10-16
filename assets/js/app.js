@@ -22,6 +22,7 @@ const RARITIES = [
 ];
 
 const RAR_INDEX = Object.fromEntries(RARITIES.map((rarity) => [rarity.key, rarity]));
+const RARITY_ORDER = Object.fromEntries(RARITIES.map((rarity, index) => [rarity.key, index]));
 
 const NAME_ADJ_COMMON = ["Chewy", "Sunny", "Rustle", "Brisk", "Hollow", "Misty", "Snappy", "Pebbly", "Crisp", "Breezy"];
 const NAME_ADJ_RARE = ["Luminous", "Feral", "Arc", "Gale", "Blazing", "Nebula", "Auric", "Prismatic", "Cryo", "Volt"];
@@ -95,7 +96,8 @@ const state = {
   binder: {},
   opened: 0,
   autoRunning: false,
-  autoTimer: null
+  autoTimer: null,
+  cardRotation: false
 };
 
 /* -------------------------------------------------------------------------- */
@@ -111,11 +113,10 @@ const elSummary = document.getElementById("summary");
 const elBinder = document.getElementById("binder");
 const btnPrimary = document.getElementById("btnPrimary");
 const btnAuto = document.getElementById("btnAuto");
+const btnRotate = document.getElementById("btnRotate");
 const boxesGrid = document.getElementById("boxesGrid");
-const heroBox = document.querySelector(".hero-box");
+const goBoxes = document.getElementById("goBoxes");
 const openedEl = document.getElementById("opened");
-
-let selectBox = () => {};
 
 /* -------------------------------------------------------------------------- */
 /* Persistence                                                                 */
@@ -217,6 +218,19 @@ function updatePrimary(label, disabled) {
   btnPrimary.disabled = Boolean(disabled);
 }
 
+function setRotatePressed(on) {
+  btnRotate.setAttribute("aria-pressed", on ? "true" : "false");
+  btnRotate.classList.toggle("active", Boolean(on));
+}
+
+function updateRotateControl(enabled) {
+  btnRotate.disabled = !enabled;
+  if (!enabled) {
+    state.cardRotation = false;
+    setRotatePressed(false);
+  }
+}
+
 function hideSummary() {
   elSummary.classList.remove("show");
   elSummary.innerHTML = "";
@@ -250,18 +264,6 @@ function renderBinder() {
 
 function renderBoxes() {
   boxesGrid.innerHTML = "";
-
-  function selectBoxHelper(boxKey, options = {}) {
-    const { animate = true } = options;
-    setBox(boxKey);
-    if (animate) {
-      const card = boxesGrid.querySelector(`.boxCard[data-key="${boxKey}"]`);
-      if (card) {
-        animateBoxSelection(card);
-      }
-    }
-  }
-
   Object.values(BOXES).forEach((box) => {
     const card = document.createElement("button");
     card.className = "boxCard";
@@ -278,7 +280,7 @@ function renderBoxes() {
     `;
 
     card.addEventListener("click", () => {
-      selectBoxHelper(box.key);
+      setBox(box.key);
       activate("packs");
       spawnCenterBox();
     });
@@ -312,6 +314,7 @@ function clearBoard() {
   elArea.querySelectorAll(".card, .centerBox").forEach((node) => node.remove());
   elProgress.innerHTML = "";
   hideSummary();
+  updateRotateControl(false);
 }
 
 function buildDots() {
@@ -335,6 +338,7 @@ function spawnCenterBox() {
   clearBoard();
   state.pulled = [];
   state.pack = null;
+  state.cardRotation = false;
   buildDots();
 
   const button = document.createElement("button");
@@ -371,6 +375,7 @@ function spawnCenterBox() {
 
   elArea.appendChild(button);
   updatePrimary("Break Box", false);
+  updateRotateControl(false);
   window.setTimeout(() => button.focus(), 20);
 }
 
@@ -389,7 +394,10 @@ function buildPack() {
   });
 
   markProgress(-1);
-  updatePrimary("Collect Cards", false);
+  updatePrimary("Collect Top Card", false);
+  updateRotateControl(true);
+  setRotatePressed(false);
+  state.cardRotation = false;
   window.setTimeout(() => {
     const topCard = getTopCard();
     if (topCard) topCard.focus();
@@ -412,6 +420,11 @@ function createCardElement(result, index) {
     if ((event.key === "Enter" || event.key === " ") && card === getTopCard()) {
       event.preventDefault();
       handleCardClick(card, result);
+      return;
+    }
+    if ((event.key === "r" || event.key === "R") && card === getTopCard()) {
+      event.preventDefault();
+      toggleTopCardRotation();
     }
   });
   card.tabIndex = 0;
@@ -424,6 +437,11 @@ function handleCardClick(card, result) {
   const topCard = getTopCard();
   if (topCard && topCard !== card) return;
 
+  if (state.cardRotation) {
+    card.classList.remove("rotated");
+    state.cardRotation = false;
+    setRotatePressed(false);
+  }
   card.dataset.revealed = "1";
   state.binder[result.key] = (state.binder[result.key] || 0) + 1;
   state.pulled.push({ key: result.key, name: result.name });
@@ -439,6 +457,15 @@ function handleCardClick(card, result) {
     if (!state.pack) return;
     state.pack.index += 1;
     markProgress(state.pack.index - 1);
+    const next = getTopCard();
+    if (next) {
+      updateRotateControl(true);
+      window.setTimeout(() => {
+        next.focus();
+      }, 40);
+    } else {
+      updateRotateControl(false);
+    }
     if (state.pack.index >= state.pack.results.length) {
       finishPack();
     }
@@ -452,6 +479,7 @@ function finishPack() {
   savePersistedState();
   showSummary();
   updatePrimary("Open Another", false);
+  updateRotateControl(false);
   if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
 }
 
@@ -461,9 +489,26 @@ function showSummary() {
   heading.textContent = "Pack Summary";
   elSummary.appendChild(heading);
 
+  const hero = state.pulled.reduce((best, item) => {
+    if (!best) return item;
+    return RARITY_ORDER[item.key] > RARITY_ORDER[best.key] ? item : best;
+  }, null);
+  if (hero) {
+    const rarity = RAR_INDEX[hero.key];
+    const heroCard = document.createElement("div");
+    heroCard.className = `summary-hero ${rarity.cls}`;
+    heroCard.innerHTML = `
+      <div class="summary-hero-label">Highlight Pull</div>
+      <div class="summary-hero-name">${hero.name}</div>
+      <div class="summary-hero-rarity">${rarity.label}</div>
+    `;
+    elSummary.appendChild(heroCard);
+  }
+
   const list = document.createElement("ul");
   list.className = "summary-list";
   state.pulled.forEach((item) => {
+    if (hero && item === hero) return;
     const rarity = RAR_INDEX[item.key];
     const li = document.createElement("li");
     li.className = rarity.cls;
@@ -473,10 +518,22 @@ function showSummary() {
     `;
     list.appendChild(li);
   });
-  elSummary.appendChild(list);
+  if (list.children.length) {
+    elSummary.appendChild(list);
+  }
 
   elSummary.classList.add("show");
   renderBinder();
+}
+
+function toggleTopCardRotation() {
+  if (btnRotate.disabled) return;
+  if (!state.pack) return;
+  const card = getTopCard();
+  if (!card) return;
+  const nowRotated = card.classList.toggle("rotated");
+  state.cardRotation = nowRotated;
+  setRotatePressed(nowRotated);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -567,6 +624,7 @@ function activate(page) {
   });
   if (page !== "packs") {
     stopAuto();
+    updateRotateControl(false);
   }
   updateHeader(page);
 }
@@ -608,14 +666,9 @@ function wireNav() {
 }
 
 function wireControls() {
-  if (heroBox) {
-    heroBox.addEventListener("click", () => {
-      const targetKey = heroBox.dataset.box || (state.currentBox && state.currentBox.key) || "standard";
-      selectBox(targetKey, { animate: false });
-      activate("packs");
-      spawnCenterBox();
-    });
-  }
+  goBoxes.addEventListener("click", () => {
+    activate("boxes");
+  });
 
   btnPrimary.addEventListener("click", () => {
     if (elSummary.classList.contains("show")) {
@@ -642,6 +695,10 @@ function wireControls() {
   btnAuto.addEventListener("click", () => {
     toggleAuto();
   });
+
+  btnRotate.addEventListener("click", () => {
+    toggleTopCardRotation();
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -654,11 +711,12 @@ function init() {
   state.opened = saved.opened;
   openedEl.textContent = state.opened;
   renderBinder();
-  selectBox = renderBoxes();
+  renderBoxes();
   wireNav();
   wireControls();
   ensurePacksTabEnabled();
   updatePrimary("Choose a box first", true);
+  updateRotateControl(false);
   updateHeader("home");
 }
 

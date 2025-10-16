@@ -18,7 +18,7 @@
         <div class="site-heading">
           <h1 id="title" class="title">Cereal Box — Home</h1>
           <p id="subtitle" class="subtitle">
-            Click a box → stacked cards → click to collect → summary.
+            1. Break the cereal box → 2. Flick cards into your binder → 3. Review the haul.
           </p>
         </div>
         <nav class="tabs" aria-label="Primary">
@@ -32,13 +32,12 @@
       <main class="pages" aria-live="polite">
         <section id="page-home" class="page active" aria-labelledby="title">
           <div class="panel hero">
-            <button class="hero-box" type="button" data-box="standard">
-              <span aria-hidden="true" class="hero-box__edge hero-box__edge--left"></span>
-              <span aria-hidden="true" class="hero-box__edge hero-box__edge--right"></span>
-              <span class="hero-box__badge">Collectible vibes</span>
-              <span class="hero-box__title">Crack the Standard Box</span>
-              <span class="hero-box__meta">Jump straight to the break and start ripping packs.</span>
-            </button>
+            <div class="hero-content">
+              <span class="hero-kicker">Collectible vibes</span>
+              <h2>Welcome to Cereal Box</h2>
+              <p>Pick a box. Odds vary by box.</p>
+              <button id="goBoxes" class="bigbtn" type="button">Enter Box Shelf →</button>
+            </div>
             <div class="hero-illustration" aria-hidden="true">
               <div class="hero-pack"></div>
               <div class="hero-card"></div>
@@ -57,12 +56,29 @@
         </section>
 
         <section id="page-packs" class="page" aria-labelledby="packsHeading">
-          <div id="area" class="panel dropArea">
-            <div id="progress" class="progress" aria-hidden="true"></div>
-            <div id="summary" class="summary" role="dialog" aria-modal="true"></div>
+          <div class="flow-layout">
+            <aside class="flow-steps" aria-label="How it works">
+              <article class="flow-step">
+                <h4><span class="step-num">1</span>Break the box</h4>
+                <p>Smash the stylized cereal box to reveal a fresh booster pack.</p>
+              </article>
+              <article class="flow-step">
+                <h4><span class="step-num">2</span>Stack &amp; flick</h4>
+                <p>Cards arrive as a tidy stack. Rotate the top card, then tap to discard it into your binder.</p>
+              </article>
+              <article class="flow-step">
+                <h4><span class="step-num">3</span>Summary spread</h4>
+                <p>After the pack empties, review a recap of every pull and keep ripping.</p>
+              </article>
+            </aside>
+            <div id="area" class="panel dropArea">
+              <div id="progress" class="progress" aria-hidden="true"></div>
+              <div id="summary" class="summary" role="dialog" aria-modal="true"></div>
+            </div>
           </div>
           <div class="cta">
             <button id="btnPrimary" class="btn" type="button">Choose a box first</button>
+            <button id="btnRotate" class="btn tertiary" type="button" disabled aria-pressed="false">Rotate Top Card</button>
             <button id="btnAuto" class="btn secondary" type="button" aria-pressed="false">Auto Collect</button>
           </div>
           <p class="stat">Opened: <b id="opened">0</b></p>
