@@ -7,29 +7,60 @@
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const CARD_REVEAL_MS = prefersReducedMotion ? 40 : 520;
 const BOX_BREAK_MS = prefersReducedMotion ? 0 : 420;
-const AUTO_STEP_MS = prefersReducedMotion ? 80 : 420;
-const WAIT_AFTER_BREAK_MS = prefersReducedMotion ? 80 : BOX_BREAK_MS + 160;
 
 const CARD_ROTATION_LIMIT = 32;
 const CARD_ROTATION_SENSITIVITY = 0.28;
 const CARD_ROTATION_KEY_STEP = 5;
 const CARD_ROTATION_RESET_DURATION = 220;
 
-const DIAMOND_SYMBOL = "⬦";
+const DIAMOND_SYMBOL = "♢";
+const STAR_SYMBOL = "✧";
+const SIX_POINT_SYMBOL = "✵";
+const CROWN_LABEL = "𓆩♕𓆪";
+const CROWN_ICON = "♕";
 
 const RARITIES = [
+  // Diamonds (most common)
   { key: "1d", label: DIAMOND_SYMBOL, icon: DIAMOND_SYMBOL, repeat: 1, cls: "rar-1d", pool: "common" },
   { key: "2d", label: DIAMOND_SYMBOL.repeat(2), icon: DIAMOND_SYMBOL, repeat: 2, cls: "rar-2d", pool: "uncommon" },
   { key: "3d", label: DIAMOND_SYMBOL.repeat(3), icon: DIAMOND_SYMBOL, repeat: 3, cls: "rar-3d", pool: "rare" },
   { key: "4d", label: DIAMOND_SYMBOL.repeat(4), icon: DIAMOND_SYMBOL, repeat: 4, cls: "rar-4d", pool: "ex" },
-  { key: "1s", label: "1★", icon: "★", repeat: 1, cls: "rar-1s", pool: "illustration" },
-  { key: "2s", label: "2★", icon: "★", repeat: 2, cls: "rar-2s", pool: "special" },
-  { key: "3s", label: "3★", icon: "★", repeat: 3, cls: "rar-3s", pool: "immersive" },
-  { key: "cr", label: "👑", icon: "👑", repeat: 1, cls: "rar-cr", pool: "crown" }
+  // Stars
+  { key: "1s", label: STAR_SYMBOL, icon: STAR_SYMBOL, repeat: 1, cls: "rar-1s", pool: "illustration" },
+  { key: "2s", label: STAR_SYMBOL.repeat(2), icon: STAR_SYMBOL, repeat: 2, cls: "rar-2s", pool: "special" },
+  { key: "3s", label: STAR_SYMBOL.repeat(3), icon: STAR_SYMBOL, repeat: 3, cls: "rar-3s", pool: "immersive" },
+  // Six-pointed stars (gradient tiers)
+  { key: "1x", label: SIX_POINT_SYMBOL, icon: SIX_POINT_SYMBOL, repeat: 1, cls: "rar-1x", pool: "six" },
+  { key: "2x", label: SIX_POINT_SYMBOL.repeat(2), icon: SIX_POINT_SYMBOL, repeat: 2, cls: "rar-2x", pool: "six" },
+  // Crown (top)
+  { key: "cr", label: CROWN_LABEL, icon: CROWN_ICON, repeat: 1, cls: "rar-cr", pool: "crown" }
 ];
 
 const RAR_INDEX = Object.fromEntries(RARITIES.map((rarity) => [rarity.key, rarity]));
 const RARITY_ORDER = Object.fromEntries(RARITIES.map((rarity, index) => [rarity.key, index]));
+
+// Normalize any garbled symbols into safe unicode for display
+(function normalizeRaritySymbols() {
+  const map = {
+    "1d": { label: "♦", icon: "♦" },
+    "2d": { label: "♦♦", icon: "♦" },
+    "3d": { label: "♦♦♦", icon: "♦" },
+    "4d": { label: "♦♦♦♦", icon: "♦" },
+    "1s": { label: "★", icon: "★" },
+    "2s": { label: "★★", icon: "★" },
+    "3s": { label: "★★★", icon: "★" },
+    "1x": { label: "✦", icon: "✦" },
+    "2x": { label: "✦✦", icon: "✦" },
+    "cr": { label: "CROWN", icon: "👑" }
+  };
+  RARITIES.forEach(r => {
+    const m = map[r.key];
+    if (m) {
+      r.label = m.label;
+      r.icon = m.icon;
+    }
+  });
+})();
 
 const NAME_ADJ_COMMON = ["Chewy", "Sunny", "Rustle", "Brisk", "Hollow", "Misty", "Snappy", "Pebbly", "Crisp", "Breezy"];
 const NAME_ADJ_RARE = ["Luminous", "Feral", "Arc", "Gale", "Blazing", "Nebula", "Auric", "Prismatic", "Cryo", "Volt"];
@@ -72,7 +103,7 @@ const BOXES = {
       { weights: { "1d": 1 } },
       { weights: { "1d": 1 } },
       { weights: { "1d": 70, "2d": 30 } },
-      { weights: { "2d": 70, "3d": 20, "4d": 7, "1s": 2.5, "2s": 0.9, "3s": 0.09, cr: 0.01 } }
+      { weights: { "2d": 68, "3d": 20, "4d": 8, "1s": 2.4, "2s": 0.85, "3s": 0.09, "1x": 0.055, "2x": 0.015, cr: 0.005 } }
     ],
     desc: "5 cards • baseline odds"
   },
@@ -84,8 +115,8 @@ const BOXES = {
       { weights: { "1d": 1 } },
       { weights: { "1d": 1 } },
       { weights: { "1d": 1 } },
-      { weights: { "2d": 60, "3d": 30, "4d": 10 } },
-      { weights: { "3d": 45, "4d": 25, "1s": 15, "2s": 8, "3s": 2.8, cr: 0.2 } }
+      { weights: { "2d": 58, "3d": 30, "4d": 10, "1s": 2 } },
+      { weights: { "3d": 42, "4d": 24, "1s": 14, "2s": 8, "3s": 2.6, "1x": 0.9, "2x": 0.35, cr: 0.15 } }
     ],
     desc: "5 cards • juiced odds"
   }
@@ -115,8 +146,6 @@ const state = {
   pulled: [],
   binder: {},
   opened: 0,
-  autoRunning: false,
-  autoTimer: null,
   cardRotation: createCardRotationState()
 };
 
@@ -133,7 +162,6 @@ const elSummary = document.getElementById("summary");
 const elDiscard = document.getElementById("discard");
 const elBinder = document.getElementById("binder");
 const btnPrimary = document.getElementById("btnPrimary");
-const btnAuto = document.getElementById("btnAuto");
 const btnRotate = document.getElementById("btnRotate");
 const boxesGrid = document.getElementById("boxesGrid");
 const goBoxes = document.getElementById("goBoxes");
@@ -215,7 +243,9 @@ function sampleFromWeights(weights) {
 }
 
 function makeCardName(rarityKey) {
-  const adjPool = ["3d", "4d", "1s", "2s", "3s", "cr"].includes(rarityKey) ? NAME_ADJ_RARE : NAME_ADJ_COMMON;
+  const adjPool = ["3d", "4d", "1s", "2s", "3s", "1x", "2x", "cr"].includes(rarityKey)
+    ? NAME_ADJ_RARE
+    : NAME_ADJ_COMMON;
   const adj = adjPool[Math.floor(Math.random() * adjPool.length)];
   const noun = NAME_NOUNS[Math.floor(Math.random() * NAME_NOUNS.length)];
   return `${adj} ${noun}`;
@@ -224,7 +254,7 @@ function makeCardName(rarityKey) {
 function topTierLabel(box) {
   const slot = box.slots[box.slots.length - 1];
   const options = Object.keys(slot.weights);
-  const order = ["1d", "2d", "3d", "4d", "1s", "2s", "3s", "cr"];
+  const order = ["1d", "2d", "3d", "4d", "1s", "2s", "3s", "1x", "2x", "cr"];
   options.sort((a, b) => order.indexOf(a) - order.indexOf(b));
   const key = options[options.length - 1];
   return RAR_INDEX[key].label;
@@ -233,6 +263,39 @@ function topTierLabel(box) {
 /* -------------------------------------------------------------------------- */
 /* Card rotation helpers                                                       */
 /* -------------------------------------------------------------------------- */
+
+function applyCardRotation(tiltX, tiltY, animate = false) {
+  const allCards = elArea.querySelectorAll(".card");
+  if (!allCards.length) return;
+
+  allCards.forEach(card => {
+    card.style.setProperty("--tilt-x", `${tiltX}deg`);
+    card.style.setProperty("--tilt-y", `${tiltY}deg`);
+
+    if (animate) {
+      card.classList.add("card-no-transition");
+      requestAnimationFrame(() => {
+        card.classList.remove("card-no-transition");
+      });
+    }
+  });
+}
+
+function applyRotationToCard(card, mode = "instant") {
+  if (!card) return;
+  
+  const allCards = elArea.querySelectorAll(".card");
+  
+  allCards.forEach(c => {
+    if (mode === "drag") {
+      c.style.transition = "transform 0s, box-shadow 0.32s ease, filter 0.32s ease";
+    } else if (mode === "smooth") {
+      c.style.transition = "transform 0.22s ease-out, box-shadow 0.32s ease, filter 0.32s ease";
+    } else {
+      c.style.transition = "transform 0.36s cubic-bezier(.2, .8, .2, 1), box-shadow 0.32s ease, filter 0.32s ease";
+    }
+  });
+}
 
 function resetCardRotationState() {
   Object.assign(state.cardRotation, createCardRotationState());
@@ -244,32 +307,6 @@ function rotationIsActive() {
 
 function clampRotationValue(value) {
   return Math.max(-CARD_ROTATION_LIMIT, Math.min(CARD_ROTATION_LIMIT, value));
-}
-
-function applyRotationToCard(card, mode = "instant") {
-  if (!card) return;
-
-  if (mode === "drag") {
-    card.style.transition = "transform 0s, box-shadow 0.32s ease, filter 0.32s ease";
-  } else if (mode === "smooth") {
-    card.style.transition = "transform 0.22s ease-out, box-shadow 0.32s ease, filter 0.32s ease";
-  } else {
-    card.style.transition = "";
-  }
-
-  const { angleX, angleY } = state.cardRotation;
-  const tiltX = Math.abs(angleX) > 0.01 ? `${angleX}deg` : "0deg";
-  const tiltY = Math.abs(angleY) > 0.01 ? `${angleY}deg` : "0deg";
-  card.style.setProperty("--tilt-x", tiltX);
-  card.style.setProperty("--tilt-y", tiltY);
-
-  if (mode === "smooth") {
-    window.setTimeout(() => {
-      if (!state.cardRotation.dragging && card.isConnected && card === getTopCard()) {
-        card.style.transition = "";
-      }
-    }, CARD_ROTATION_RESET_DURATION);
-  }
 }
 
 function setCardRotationAngles(angleX, angleY, mode = "instant") {
@@ -407,7 +444,7 @@ function renderBinder() {
       const cell = document.createElement("div");
       cell.className = "thumb";
       cell.innerHTML = `
-        <div class="thumb-icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
+        <div class="thumb-icon">${rarity.icon.repeat(rarity.repeat)}</div>
         <div class="thumb-count">${state.binder[rarity.key]}</div>
       `;
       grid.appendChild(cell);
@@ -456,10 +493,23 @@ function renderBoxes() {
     card.type = "button";
     card.dataset.key = box.key;
     card.setAttribute("aria-pressed", "false");
+    const displayEmoji = (boxKey => {
+      if (boxKey === 'mini') return '🥣';
+      if (boxKey === 'standard') return '🥣✨';
+      if (boxKey === 'premium') return '🥣🔥';
+      return '🥣';
+    })(box.key);
+    const displayDesc = (boxKey => {
+      if (boxKey === 'mini') return '4 cards • budget odds';
+      if (boxKey === 'standard') return '5 cards • baseline odds';
+      if (boxKey === 'premium') return '5 cards • juiced odds';
+      return box.desc || '';
+    })(box.key);
+
     card.innerHTML = `
-      <div class="boxTop"><div class="boxEmoji" aria-hidden="true">${box.emoji}</div></div>
+      <div class="boxTop"><div class="boxEmoji" aria-hidden="true">${displayEmoji}</div></div>
       <div class="boxTitle">${box.title}</div>
-      <p class="boxMeta">${box.desc}</p>
+      <p class="boxMeta">${displayDesc}</p>
       <div class="boxChips">
         <span class="chip">Slots: ${box.slots.length}</span>
         <span class="chip">Top: ${topTierLabel(box)}</span>
@@ -543,6 +593,8 @@ function clearBoard() {
   if (stack) stack.remove();
   const boxwrap = elArea.querySelector(".pack-stage__boxwrap");
   if (boxwrap) boxwrap.remove();
+  const stageSummary = elArea.querySelector(".stage-summary");
+  if (stageSummary) stageSummary.remove();
   elArea.querySelectorAll(".card, .cereal-box").forEach((node) => node.remove());
   elProgress.innerHTML = "";
   hideSummary();
@@ -604,7 +656,7 @@ function addDiscardCard(result) {
   card.setAttribute("role", "listitem");
   card.innerHTML = `
     <div class="rarity">${rarity.label}</div>
-    <div class="icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
+    <div class="icon">${rarity.icon.repeat(rarity.repeat)}</div>
     <div class="name">${result.name}</div>
   `;
   elDiscard.dataset.empty = "false";
@@ -663,6 +715,7 @@ function spawnCenterBox() {
     <span class="visually-hidden">Break ${state.currentBox.title}</span>
     <div class="cereal-box__lid" aria-hidden="true"></div>
     <div class="cereal-box__body">
+      <div class="cereal-box__frontmark" aria-hidden="true"><span class="icon">${DIAMOND_SYMBOL}</span></div>
       <div class="cereal-box__cards" aria-hidden="true">
         <div class="cereal-box__card cereal-box__card--front"></div>
         <div class="cereal-box__card cereal-box__card--mid"></div>
@@ -677,6 +730,10 @@ function spawnCenterBox() {
   const triggerBreak = () => {
     button.disabled = true;
     elArea.classList.add("breaking");
+    
+    // Create explosion effect
+    createBoxExplosion(button);
+    
     window.setTimeout(() => {
       boxwrap.remove();
       elArea.classList.remove("breaking");
@@ -708,6 +765,25 @@ function buildPack() {
     return { key, name: makeCardName(key) };
   });
 
+  // Check for high rarity cards
+  const hasRareCard = results.some(r => ["1s", "2s", "3s", "1x", "2x", "cr"].includes(r.key));
+  const hasUltraRare = results.some(r => ["1x", "2x", "cr"].includes(r.key));
+  
+  console.log("Pack contents:", results.map(r => r.key).join(", "));
+  console.log("Has rare:", hasRareCard, "Has ultra:", hasUltraRare);
+  
+  // Always show cutscene for testing - remove the rarity check temporarily
+  if (!prefersReducedMotion) {
+    if (hasUltraRare) {
+      showPackOpeningCutscene("ULTRA RARE PULL!", 2500);
+    } else if (hasRareCard) {
+      showPackOpeningCutscene("RARE CARD!", 2000);
+    } else {
+      // Show for all packs temporarily for testing
+      showPackOpeningCutscene("PACK OPENING!", 1500);
+    }
+  }
+
   state.pack = { results, index: 0 };
   const stack = getStackElement() || (() => {
     const created = document.createElement("div");
@@ -719,14 +795,23 @@ function buildPack() {
 
   results.forEach((result, index) => {
     const card = createCardElement(result, index);
+    card.style.setProperty("--reveal-delay", index);
     stack.appendChild(card);
+    
     if (!prefersReducedMotion) {
-      requestAnimationFrame(() => {
-        card.classList.add("card-enter--show");
-        window.setTimeout(() => {
-          card.classList.remove("card-enter", "card-enter--show");
-        }, CARD_REVEAL_MS + 120);
-      });
+      // Use new reveal animation
+      card.classList.add("card-reveal");
+      
+      // Add special effects for rare cards
+      if (["1x", "2x", "cr"].includes(result.key)) {
+        setTimeout(() => {
+          createRarityParticles(card, result.key);
+        }, 600 + (index * 150));
+      }
+      
+      window.setTimeout(() => {
+        card.classList.remove("card-reveal", "card-enter");
+      }, 1200 + (index * 150));
     } else {
       card.classList.remove("card-enter");
     }
@@ -740,7 +825,7 @@ function buildPack() {
   window.setTimeout(() => {
     const topCard = getTopCard();
     if (topCard) topCard.focus();
-  }, 60);
+  }, 1500);
 }
 
 function createCardElement(result, index) {
@@ -755,7 +840,7 @@ function createCardElement(result, index) {
   card.style.setProperty("--tilt-y", "0deg");
   card.innerHTML = `
     <div class="ribbon">${rarity.label}</div>
-    <div class="card-icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
+    <div class="card-icon">${rarity.icon.repeat(rarity.repeat)}</div>
     <div class="name">${result.name}</div>
   `;
   card.addEventListener("click", () => handleCardClick(card, result));
@@ -797,40 +882,149 @@ function createCardElement(result, index) {
 }
 
 function handleCardClick(card, result) {
-  if (!state.pack) return;
-  if (card.dataset.revealed === "1") return;
-  const topCard = getTopCard();
-  if (topCard && topCard !== card) return;
-
-  if (rotationIsActive()) {
-    resetTopCardRotation();
-  }
-  card.dataset.revealed = "1";
-  state.binder[result.key] = (state.binder[result.key] || 0) + 1;
-  state.pulled.push({ key: result.key, name: result.name });
-
-  animateCardToDiscard(card);
-
-  window.setTimeout(() => {
+  if (!card || !result) return;
+  if (card !== getTopCard()) return;
+  
+  // Add collection animation
+  card.classList.add('collecting');
+  
+  // Create particle effect
+  createParticles(card);
+  
+  setTimeout(() => {
     addDiscardCard(result);
+    state.pulled.push(result);
+    state.binder[result.key] = (state.binder[result.key] || 0) + 1;
+    
     card.remove();
-    restackCards();
-    if (!state.pack) return;
-    state.pack.index += 1;
-    markProgress(state.pack.index - 1);
-    const next = getTopCard();
-    if (next) {
-      updateRotateControl(true);
-      window.setTimeout(() => {
-        next.focus();
-      }, 40);
-    } else {
-      updateRotateControl(false);
-    }
-    if (state.pack.index >= state.pack.results.length) {
+    
+    const remaining = elArea.querySelectorAll(".card").length;
+    if (remaining === 0) {
       finishPack();
+    } else {
+      updatePrimary(`${remaining} card${remaining === 1 ? "" : "s"} left`, false);
+      updateRotateControl(true);
     }
-  }, CARD_REVEAL_MS);
+  }, 400);
+}
+
+function createParticles(element) {
+  const rect = element.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  
+  for (let i = 0; i < 12; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    
+    const angle = (i / 12) * Math.PI * 2;
+    const distance = 100 + Math.random() * 100;
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+    
+    particle.style.left = centerX + 'px';
+    particle.style.top = centerY + 'px';
+    particle.style.setProperty('--particle-x', x + 'px');
+    particle.style.setProperty('--particle-y', y + 'px');
+    
+    document.body.appendChild(particle);
+    
+    setTimeout(() => particle.remove(), 1000);
+  }
+}
+
+function createBoxExplosion(box) {
+  box.classList.add('exploding');
+  
+  const rect = box.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  
+  for (let i = 0; i < 20; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 150 + Math.random() * 150;
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+    
+    particle.style.left = centerX + 'px';
+    particle.style.top = centerY + 'px';
+    particle.style.setProperty('--particle-x', x + 'px');
+    particle.style.setProperty('--particle-y', y + 'px');
+    particle.style.background = `hsl(${Math.random() * 60 + 20}, 70%, 60%)`;
+    
+    document.body.appendChild(particle);
+    
+    setTimeout(() => particle.remove(), 1000);
+  }
+}
+
+function showPackOpeningCutscene(text, duration = 2000) {
+  console.log("Showing cutscene:", text);
+  
+  const cutscene = document.createElement('div');
+  cutscene.className = 'pack-opening-cutscene';
+  cutscene.innerHTML = `
+    <div class="pack-opening-cutscene__content">
+      ${text}
+    </div>
+  `;
+  
+  document.body.appendChild(cutscene);
+  console.log("Cutscene added to body");
+  
+  setTimeout(() => {
+    cutscene.style.opacity = '0';
+    cutscene.style.transition = 'opacity 0.5s ease';
+    setTimeout(() => {
+      cutscene.remove();
+      console.log("Cutscene removed");
+    }, 500);
+  }, duration);
+}
+
+function createRarityParticles(card, rarityKey) {
+  const rect = card.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  
+  // Color scheme based on rarity
+  let color;
+  if (rarityKey === 'cr') {
+    color = '#fbbf24';
+  } else if (rarityKey === '2x') {
+    color = '#f97316';
+  } else if (rarityKey === '1x') {
+    color = '#c084fc';
+  } else {
+    color = '#3b82f6';
+  }
+  
+  // Create sparkle particles
+  for (let i = 0; i < 15; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    
+    const angle = (i / 15) * Math.PI * 2;
+    const distance = 80 + Math.random() * 50;
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+    
+    particle.style.left = centerX + 'px';
+    particle.style.top = centerY + 'px';
+    particle.style.width = '6px';
+    particle.style.height = '6px';
+    particle.style.background = color;
+    particle.style.boxShadow = `0 0 10px ${color}`;
+    particle.style.setProperty('--particle-x', x + 'px');
+    particle.style.setProperty('--particle-y', y + 'px');
+    
+    document.body.appendChild(particle);
+    
+    setTimeout(() => particle.remove(), 1200);
+  }
 }
 
 function finishPack() {
@@ -841,17 +1035,21 @@ function finishPack() {
   showSummary();
   updatePrimary("Open Another", false);
   updateRotateControl(false);
-  if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
 }
 
 function showSummary() {
-  elSummary.innerHTML = "";
-  elSummary.dataset.empty = "false";
+  // Build an embedded summary inside the stage
+  const existing = elArea.querySelector(".stage-summary");
+  if (existing) existing.remove();
+
+  const container = document.createElement("div");
+  container.className = "stage-summary";
 
   const hero = state.pulled.reduce((best, item) => {
     if (!best) return item;
     return RARITY_ORDER[item.key] > RARITY_ORDER[best.key] ? item : best;
   }, null);
+
   if (hero) {
     const rarity = RAR_INDEX[hero.key];
     const heroCard = document.createElement("div");
@@ -861,7 +1059,7 @@ function showSummary() {
       <div class="summary-hero-name">${hero.name}</div>
       <div class="summary-hero-rarity">${rarity.label}</div>
     `;
-    elSummary.appendChild(heroCard);
+    container.appendChild(heroCard);
   }
 
   const list = document.createElement("ul");
@@ -878,83 +1076,19 @@ function showSummary() {
     list.appendChild(li);
   });
   if (list.children.length) {
-    elSummary.appendChild(list);
+    container.appendChild(list);
   }
+
+  elArea.appendChild(container);
+
+  // Maintain the hidden sidebar summary state for aria/consistency
+  elSummary.innerHTML = "";
+  elSummary.dataset.empty = "false";
+
   renderBinder();
 }
 
-/* -------------------------------------------------------------------------- */
-/* Auto collect                                                                */
-/* -------------------------------------------------------------------------- */
-
-function scheduleAutoStep(delay = AUTO_STEP_MS) {
-  if (!state.autoRunning) return;
-  if (state.autoTimer) {
-    window.clearTimeout(state.autoTimer);
-  }
-  state.autoTimer = window.setTimeout(() => {
-    if (!state.autoRunning) return;
-
-    if (state.currentPage !== "packs") {
-      activate("packs");
-    }
-
-    if (elSummary.dataset.empty !== "true") {
-      hideSummary();
-      spawnCenterBox();
-      scheduleAutoStep(AUTO_STEP_MS);
-      return;
-    }
-
-    const center = document.getElementById("centerBox");
-    if (center) {
-      center.click();
-      scheduleAutoStep(WAIT_AFTER_BREAK_MS);
-      return;
-    }
-
-    const topCard = getTopCard();
-    if (topCard) {
-      topCard.click();
-      scheduleAutoStep(CARD_REVEAL_MS);
-      return;
-    }
-
-    spawnCenterBox();
-    scheduleAutoStep(AUTO_STEP_MS);
-  }, delay);
-}
-
-function startAuto() {
-  state.autoRunning = true;
-  ensurePacksTabEnabled();
-  if (!state.currentBox) {
-    state.currentBox = BOXES.standard;
-  }
-  btnAuto.textContent = "Auto: ON";
-  btnAuto.setAttribute("aria-pressed", "true");
-  activate("packs");
-  scheduleAutoStep(AUTO_STEP_MS);
-}
-
-function stopAuto() {
-  if (!state.autoRunning) return;
-  state.autoRunning = false;
-  btnAuto.textContent = "Auto Collect";
-  btnAuto.setAttribute("aria-pressed", "false");
-  if (state.autoTimer) {
-    window.clearTimeout(state.autoTimer);
-  }
-  state.autoTimer = null;
-}
-
-function toggleAuto() {
-  if (state.autoRunning) {
-    stopAuto();
-  } else {
-    startAuto();
-  }
-}
+// Auto feature removed
 
 /* -------------------------------------------------------------------------- */
 /* Navigation                                                                  */
@@ -970,7 +1104,6 @@ function activate(page) {
     if (tab) tab.classList.toggle("active", on);
   });
   if (page !== "packs") {
-    stopAuto();
     updateRotateControl(false);
   }
   updateHeader(page);
@@ -985,7 +1118,7 @@ function updateHeader(page) {
   };
   elTitle.textContent = `Cereal Box — ${titles[page]}`;
   if (page === "packs" && state.currentBox) {
-    elSubtitle.textContent = `${state.currentBox.slots.length} cards • ${state.currentBox.desc}`;
+    elSubtitle.textContent = `${state.currentBox.slots.length} cards • clean motion`;
   } else if (page === "boxes") {
     elSubtitle.textContent = "Pick a box. Each has different slots and odds.";
   } else if (page === "binder") {
@@ -1044,15 +1177,62 @@ function wireControls() {
     spawnCenterBox();
   });
 
-  btnAuto.addEventListener("click", () => {
-    toggleAuto();
-  });
-
   btnRotate.addEventListener("click", () => {
     resetTopCardRotation({ animate: true });
     const topCard = getTopCard();
     if (topCard) {
       topCard.focus();
+    }
+  });
+}
+
+/* Global keybinds */
+function wireGlobalKeys() {
+  window.addEventListener("keydown", (event) => {
+    const key = event.key;
+    if (state.currentPage !== "packs") return;
+    // rotation nudges regardless of focus
+    if (key === "ArrowUp" || key === "w" || key === "W") {
+      event.preventDefault();
+      nudgeCardRotation(CARD_ROTATION_KEY_STEP, 0);
+      return;
+    }
+    if (key === "ArrowDown" || key === "s" || key === "S") {
+      event.preventDefault();
+      nudgeCardRotation(-CARD_ROTATION_KEY_STEP, 0);
+      return;
+    }
+    if (key === "ArrowLeft" || key === "a" || key === "A") {
+      event.preventDefault();
+      nudgeCardRotation(0, -CARD_ROTATION_KEY_STEP);
+      return;
+    }
+    if (key === "ArrowRight" || key === "d" || key === "D") {
+      event.preventDefault();
+      nudgeCardRotation(0, CARD_ROTATION_KEY_STEP);
+      return;
+    }
+    if (key === "Escape") {
+      resetTopCardRotation({ animate: true });
+      return;
+    }
+    // B: break/open; C: collect top; R: reset rotation
+    if (key === "b" || key === "B") {
+      const centerBox = document.getElementById("centerBox");
+      if (centerBox) {
+        centerBox.click();
+      } else if (!state.pack) {
+        spawnCenterBox();
+      }
+      return;
+    }
+    if (key === "c" || key === "C") {
+      const topCard = getTopCard();
+      if (topCard) topCard.click();
+      return;
+    }
+    if (key === "r" || key === "R") {
+      resetTopCardRotation({ animate: true });
     }
   });
 }
@@ -1070,6 +1250,7 @@ function init() {
   const selectBox = renderBoxes();
   wireNav();
   wireControls();
+  wireGlobalKeys();
   ensurePacksTabEnabled();
   const defaultBoxKey = saved.boxKey && BOXES[saved.boxKey] ? saved.boxKey : state.currentBox.key;
   if (typeof selectBox === "function") {
