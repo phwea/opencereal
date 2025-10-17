@@ -3,110 +3,121 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cereal Box — Pocket-feel Stack Flow</title>
+    <title>Opencereal — Booster Breaker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="assets/css/main.css" />
   </head>
   <body>
-    <div class="bg-layers" aria-hidden="true">
-      <div class="bg-layer orbit"></div>
-      <div class="bg-layer glow"></div>
-      <div class="bg-layer shapes"></div>
-      <div class="bg-layer grid"></div>
+    <div class="background" aria-hidden="true">
+      <div class="background__layer background__layer--stars"></div>
+      <div class="background__layer background__layer--aurora"></div>
+      <div class="background__layer background__layer--grid"></div>
     </div>
-    <div class="app">
-      <header class="site-header">
-        <div class="site-heading">
-          <h1 id="title" class="title">Cereal Box — Home</h1>
-          <p id="subtitle" class="subtitle">
-            1. Break the cereal box → 2. Flick cards into your binder → 3. Review the haul.
+
+    <div class="app" id="app">
+      <header class="header">
+        <div class="header__branding">
+          <span class="header__badge">Opencereal Lab</span>
+          <h1 class="header__title">Booster Breaker</h1>
+          <p class="header__tagline">
+            Tear the foil, pray to the odds, and celebrate every glimmer. No pity. No mercy.
           </p>
         </div>
-        <nav class="tabs" aria-label="Primary">
-          <button class="tab active" data-page="home">Home</button>
-          <button class="tab" data-page="boxes">Boxes</button>
-          <button class="tab" data-page="packs" disabled>Packs</button>
-          <button class="tab" data-page="binder">Binder</button>
+        <nav class="header__nav" aria-label="Main">
+          <button class="nav__tab is-active" type="button" data-page="breaker">Open Packs</button>
+          <button class="nav__tab" type="button" data-page="inventory">Inventory</button>
         </nav>
       </header>
 
-      <main class="pages" aria-live="polite">
-        <section id="page-home" class="page active" aria-labelledby="title">
-          <div class="panel hero">
-            <div class="hero-content">
-              <span class="hero-kicker">Collectible vibes</span>
-              <h2>Welcome to Cereal Box</h2>
-              <p>Pick a box. Odds vary by box.</p>
-              <button id="goBoxes" class="bigbtn" type="button">Enter Box Shelf →</button>
-            </div>
-            <div class="hero-illustration" aria-hidden="true">
-              <div class="hero-pack"></div>
-              <div class="hero-card"></div>
-            </div>
-          </div>
-        </section>
-
-        <section id="page-boxes" class="page" aria-labelledby="boxesHeading">
+      <main class="main" aria-live="polite">
+        <section id="page-breaker" class="page is-active" aria-labelledby="breaker-title">
           <div class="panel">
-            <div class="panel-head">
-              <h3 id="boxesHeading" class="panel-title">Pick a Box</h3>
-              <p class="panel-subtitle">Each box has unique odds and featured pulls.</p>
-            </div>
-            <div id="boxesGrid" class="grid" role="list"></div>
-          </div>
-        </section>
-
-        <section id="page-packs" class="page" aria-labelledby="packsHeading">
-          <div class="pack-screen">
-            <div class="pack-stage panel">
-              <div class="stage-head">
-                <div class="panel-head">
-                  <h3 id="packsHeading" class="panel-title">Pack Opening</h3>
-                  <p class="panel-subtitle">Crack the cereal box, then peel the stack one card at a time.</p>
-                </div>
-                <div id="progress" class="progress" aria-hidden="true"></div>
+            <div class="panel__head">
+              <div>
+                <h2 id="breaker-title">Pack Ritual</h2>
+                <p class="panel__sub">Select your expansion, then trust the RNG.</p>
               </div>
-              <div class="stage-body">
-                <div class="stage-area">
-                  <div class="stage-frame">
-                    <div id="area" class="dropArea"></div>
+              <div class="panel__controls">
+                <label class="picker">
+                  <span class="picker__label">Expansion</span>
+                  <select id="expansionSelect" class="picker__input" aria-label="Select expansion"></select>
+                </label>
+                <button id="openPackBtn" class="btn btn--primary" type="button">Summon Pack</button>
+              </div>
+            </div>
+            <div class="breaker">
+              <div class="breaker__stage" role="region" aria-label="Pack stage">
+                <div id="packDisplay" class="breaker__pack placeholder" aria-live="assertive"></div>
+                <div id="cardStack" class="card-stack" aria-live="polite" data-state="waiting"></div>
+              </div>
+              <aside class="breaker__summary" aria-label="Pack summary">
+                <div class="summary">
+                  <h3 class="summary__title">Last Pull</h3>
+                  <p class="summary__hint">Flip cards to reveal the haul. Rare sparks are immortalized here.</p>
+                  <div id="summaryList" class="summary__list"></div>
+                  <div class="summary__footer">
+                    <div class="summary__stat">
+                      <span class="summary__label">Cards revealed</span>
+                      <span id="summaryRevealed" class="summary__value">0</span>
+                    </div>
+                    <div class="summary__stat">
+                      <span class="summary__label">New entries</span>
+                      <span id="summaryNew" class="summary__value">0</span>
+                    </div>
+                    <div class="summary__stat">
+                      <span class="summary__label">Duplicates</span>
+                      <span id="summaryDupes" class="summary__value">0</span>
+                    </div>
                   </div>
                 </div>
-                <aside class="stage-discard" aria-label="Recent pulls">
-                  <h4 class="stage-label">Recent Pulls</h4>
-                  <div id="discard" class="discard-grid" role="list" data-empty="true"></div>
-                </aside>
-              </div>
+              </aside>
             </div>
-            <div class="pack-summary panel">
-              <div class="panel-head">
-                <h3 class="panel-title">Pack Summary</h3>
-                <p class="panel-subtitle">Spotlight the hits and track everything in the stack.</p>
-              </div>
-              <div id="summary" class="summary" role="region" aria-live="polite"></div>
-            </div>
-            <aside class="panel discard-panel" aria-label="Recent pulls">
-              <div class="panel-head">
-                <h4 class="panel-title">Recent Pulls</h4>
-                <p class="panel-subtitle">Showcase each card as it leaves the pack.</p>
-              </div>
-              <div id="discard" class="discard-grid" role="list" data-empty="true"></div>
-            </aside>
           </div>
-          <div class="cta">
-            <button id="btnPrimary" class="btn" type="button">Choose a box first</button>
-            <button id="btnRotate" class="btn tertiary" type="button" disabled>Reset Rotation</button>
-            <button id="btnAuto" class="btn secondary" type="button" aria-pressed="false">Auto Collect</button>
-          </div>
-          <p class="stat">Opened: <b id="opened">0</b></p>
         </section>
 
-        <section id="page-binder" class="page" aria-labelledby="binderHeading">
+        <section id="page-inventory" class="page" aria-labelledby="inventory-title">
           <div class="panel">
-            <div class="panel-head">
-              <h3 id="binderHeading" class="panel-title">Binder Totals</h3>
-              <p class="panel-subtitle">Track how many cards you have by rarity.</p>
+            <div class="panel__head">
+              <div>
+                <h2 id="inventory-title">Collection Vault</h2>
+                <p class="panel__sub">
+                  Every card you’ve ever flipped lives here. Filter by rarity, marvel at the duplicates, chase the
+                  rainbow.
+                </p>
+              </div>
             </div>
-            <div id="binder"></div>
+            <div class="inventory">
+              <div class="inventory__controls">
+                <div class="inventory__stats">
+                  <div class="inventory__stat">
+                    <span class="inventory__label">Unique cards</span>
+                    <span id="inventoryUnique" class="inventory__value">0</span>
+                  </div>
+                  <div class="inventory__stat">
+                    <span class="inventory__label">Total cards</span>
+                    <span id="inventoryTotal" class="inventory__value">0</span>
+                  </div>
+                  <div class="inventory__stat">
+                    <span class="inventory__label">Completion</span>
+                    <span id="inventoryCompletion" class="inventory__value">0%</span>
+                  </div>
+                </div>
+                <div class="inventory__filters" role="group" aria-label="Rarity filter">
+                  <button class="filter is-active" type="button" data-filter="all">All</button>
+                  <button class="filter" type="button" data-filter="common">Common</button>
+                  <button class="filter" type="button" data-filter="uncommon">Uncommon</button>
+                  <button class="filter" type="button" data-filter="rare">Rare</button>
+                  <button class="filter" type="button" data-filter="ultra">Ultra Rare</button>
+                  <button class="filter" type="button" data-filter="secret">Secret Rare</button>
+                </div>
+              </div>
+              <div id="inventoryGrid" class="inventory__grid" role="list"></div>
+            </div>
           </div>
         </section>
       </main>

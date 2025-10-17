@@ -1,1087 +1,648 @@
 "use strict";
 
-/* -------------------------------------------------------------------------- */
-/* Data                                                                        */
-/* -------------------------------------------------------------------------- */
-
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const CARD_REVEAL_MS = prefersReducedMotion ? 40 : 520;
-const BOX_BREAK_MS = prefersReducedMotion ? 0 : 420;
-const AUTO_STEP_MS = prefersReducedMotion ? 80 : 420;
-const WAIT_AFTER_BREAK_MS = prefersReducedMotion ? 80 : BOX_BREAK_MS + 160;
-
-const CARD_ROTATION_LIMIT = 32;
-const CARD_ROTATION_SENSITIVITY = 0.28;
-const CARD_ROTATION_KEY_STEP = 5;
-const CARD_ROTATION_RESET_DURATION = 220;
-
-const DIAMOND_SYMBOL = "⬦";
-
-const STACK_OFFSET_X = -14;
-const STACK_OFFSET_Y = 12;
-const STACK_OFFSET_Z = -28;
 
 const RARITIES = [
-  { key: "1d", label: DIAMOND_SYMBOL, icon: DIAMOND_SYMBOL, repeat: 1, cls: "rar-1d", pool: "common" },
-  { key: "2d", label: DIAMOND_SYMBOL.repeat(2), icon: DIAMOND_SYMBOL, repeat: 2, cls: "rar-2d", pool: "uncommon" },
-  { key: "3d", label: DIAMOND_SYMBOL.repeat(3), icon: DIAMOND_SYMBOL, repeat: 3, cls: "rar-3d", pool: "rare" },
-  { key: "4d", label: DIAMOND_SYMBOL.repeat(4), icon: DIAMOND_SYMBOL, repeat: 4, cls: "rar-4d", pool: "ex" },
-  { key: "1s", label: "1★", icon: "★", repeat: 1, cls: "rar-1s", pool: "illustration" },
-  { key: "2s", label: "2★", icon: "★", repeat: 2, cls: "rar-2s", pool: "special" },
-  { key: "3s", label: "3★", icon: "★", repeat: 3, cls: "rar-3s", pool: "immersive" },
-  { key: "cr", label: "👑", icon: "👑", repeat: 1, cls: "rar-cr", pool: "crown" }
+  { key: "common", label: "Common", odds: 0.735, color: "var(--ink-soft)" },
+  { key: "uncommon", label: "Uncommon", odds: 0.18, color: "var(--accent)" },
+  { key: "rare", label: "Rare", odds: 0.08, color: "var(--rare)" },
+  { key: "ultra", label: "Ultra Rare", odds: 0.005, color: "var(--ultra)" },
+  { key: "secret", label: "Secret Rare", odds: 0.002, color: "var(--secret)" }
 ];
 
-const RAR_INDEX = Object.fromEntries(RARITIES.map((rarity) => [rarity.key, rarity]));
-const RARITY_ORDER = Object.fromEntries(RARITIES.map((rarity, index) => [rarity.key, index]));
+const RARITY_MAP = Object.fromEntries(RARITIES.map((rarity) => [rarity.key, rarity]));
 
-const NAME_ADJ_COMMON = ["Chewy", "Sunny", "Rustle", "Brisk", "Hollow", "Misty", "Snappy", "Pebbly", "Crisp", "Breezy"];
-const NAME_ADJ_RARE = ["Luminous", "Feral", "Arc", "Gale", "Blazing", "Nebula", "Auric", "Prismatic", "Cryo", "Volt"];
-const NAME_NOUNS = [
-  "Sprout",
-  "Pounce",
-  "Fang",
-  "Wisp",
-  "Warden",
-  "Stride",
-  "Tide",
-  "Spark",
-  "Grove",
-  "Raptor",
-  "Echo",
-  "Gloom",
-  "Nimbus",
-  "Rune"
-];
-
-const BOXES = {
-  mini: {
-    key: "mini",
-    title: "Mini Box",
-    emoji: "🥣",
-    slots: [
-      { weights: { "1d": 1 } },
-      { weights: { "1d": 1 } },
-      { weights: { "1d": 65, "2d": 35 } },
-      { weights: { "2d": 70, "3d": 20, "4d": 8, "1s": 1.7, "2s": 0.28, "3s": 0.02 } }
-    ],
-    desc: "4 cards • budget odds"
+const EXPANSIONS = [
+  {
+    key: "base",
+    name: "Base Set",
+    tagline: "Where it all began. Crisp borders, primal monsters, nostalgia guaranteed.",
+    palette: ["#ff8f53", "#6fffe9"],
+    cards: {
+      common: [
+        "Sparkling Badger",
+        "Mistwing Fawn",
+        "Pebbleback Cub",
+        "Brass Ember",
+        "Treetop Skipper",
+        "Glintscale Minnow",
+        "Bramble Scout",
+        "Glowvine Puff"
+      ],
+      uncommon: [
+        "Stormcall Jackal",
+        "Hollowroot Sage",
+        "Pyreline Racer",
+        "Abyssal Smudge",
+        "Runeveil Owl"
+      ],
+      rare: ["Prismatic Lynx", "Glacier Titan", "Sunflare Dragonling", "Nightmare Bloom"],
+      ultra: ["Auric Seraphim", "Chaos Gear Leviathan"],
+      secret: ["Chromatic Arc Relic"]
+    }
   },
-  standard: {
-    key: "standard",
-    title: "Standard Box",
-    emoji: "📦",
-    slots: [
-      { weights: { "1d": 1 } },
-      { weights: { "1d": 1 } },
-      { weights: { "1d": 1 } },
-      { weights: { "1d": 70, "2d": 30 } },
-      { weights: { "2d": 70, "3d": 20, "4d": 7, "1s": 2.5, "2s": 0.9, "3s": 0.09, cr: 0.01 } }
-    ],
-    desc: "5 cards • baseline odds"
+  {
+    key: "galactic",
+    name: "Galactic Apex",
+    tagline: "Cosmic beasts and neon circuitry fuse in a synthwave frontier.",
+    palette: ["#ff4fd4", "#6d8bff"],
+    cards: {
+      common: [
+        "Luminous Bytecat",
+        "Comet Nomad",
+        "Nebula Flicker",
+        "Circuit Pup",
+        "Graveloop Imp",
+        "Astro Slicer",
+        "Vacuum Hopper"
+      ],
+      uncommon: [
+        "Photon Vanguard",
+        "Satellite Idol",
+        "Ionstream Dancer",
+        "Meteor Golem",
+        "Warp Rift Weaver"
+      ],
+      rare: ["Stellar Forge Hydra", "Nova Pulse Wyvern", "Eventide Pulse"],
+      ultra: ["Synthwave Phoenix", "Binary Monarch"],
+      secret: ["Eclipse Horizon Shard"]
+    }
   },
-  premium: {
-    key: "premium",
-    title: "Premium Box",
-    emoji: "🎁",
-    slots: [
-      { weights: { "1d": 1 } },
-      { weights: { "1d": 1 } },
-      { weights: { "1d": 1 } },
-      { weights: { "2d": 60, "3d": 30, "4d": 10 } },
-      { weights: { "3d": 45, "4d": 25, "1s": 15, "2s": 8, "3s": 2.8, cr: 0.2 } }
-    ],
-    desc: "5 cards • juiced odds"
+  {
+    key: "neo",
+    name: "Neo Flash",
+    tagline: "Glitchy sprites resurrected with holofoil swagger and electric grit.",
+    palette: ["#ffe066", "#9b5cff"],
+    cards: {
+      common: [
+        "Pixel Bloom",
+        "Retro Fang",
+        "Arcade Slug",
+        "Neon Sprout",
+        "Voltage Tadpole",
+        "Sprite Runner",
+        "Synth Badger",
+        "Laser Pup"
+      ],
+      uncommon: [
+        "Shockstep Lynx",
+        "Bugged Ronin",
+        "Prism Druid",
+        "Cyber Lotus",
+        "Backline Specter"
+      ],
+      rare: ["Glitched Eclipse", "Mirage Breaker", "Thunder Idol"],
+      ultra: ["Overclocked Chimera", "Hyperdrive Kitsune"],
+      secret: ["Mythic Debug Relic"]
+    }
   }
-};
+];
 
-/* -------------------------------------------------------------------------- */
-/* State                                                                       */
-/* -------------------------------------------------------------------------- */
+const PACK_SIZE_RANGE = [6, 9];
+const SUSPENSE_CARD_COUNT = 2;
+const STORAGE_KEY = "opencereal_breaker_state";
 
-function createCardRotationState() {
-  return {
-    angleX: 0,
-    angleY: 0,
-    baseAngleX: 0,
-    baseAngleY: 0,
-    originX: 0,
-    originY: 0,
-    pointerId: null,
-    dragging: false
-  };
-}
+const app = document.getElementById("app");
+const packDisplay = document.getElementById("packDisplay");
+const cardStack = document.getElementById("cardStack");
+const openPackBtn = document.getElementById("openPackBtn");
+const expansionSelect = document.getElementById("expansionSelect");
+const summaryList = document.getElementById("summaryList");
+const summaryRevealed = document.getElementById("summaryRevealed");
+const summaryNew = document.getElementById("summaryNew");
+const summaryDupes = document.getElementById("summaryDupes");
+const inventoryGrid = document.getElementById("inventoryGrid");
+const inventoryUnique = document.getElementById("inventoryUnique");
+const inventoryTotal = document.getElementById("inventoryTotal");
+const inventoryCompletion = document.getElementById("inventoryCompletion");
+const inventoryFilters = document.querySelectorAll(".filter");
+const tabs = document.querySelectorAll(".nav__tab");
+const pages = document.querySelectorAll(".page");
+
+const initialBinder = loadSavedBinder();
 
 const state = {
-  currentPage: "home",
-  currentBox: BOXES.standard,
+  expansion: EXPANSIONS[0],
   pack: null,
-  pulled: [],
-  binder: {},
-  opened: 0,
-  autoRunning: false,
-  autoTimer: null,
-  cardRotation: createCardRotationState()
+  revealCount: 0,
+  newCount: 0,
+  duplicateCount: 0,
+  binder: initialBinder,
+  totalUniqueCards: countUniqueCards(initialBinder),
+  filter: "all",
+  isPackOpen: false
 };
 
-/* -------------------------------------------------------------------------- */
-/* DOM references                                                              */
-/* -------------------------------------------------------------------------- */
-
-const getPage = (key) => document.getElementById(`page-${key}`);
-const elTitle = document.getElementById("title");
-const elSubtitle = document.getElementById("subtitle");
-const elArea = document.getElementById("area");
-const elProgress = document.getElementById("progress");
-const elSummary = document.getElementById("summary");
-const elDiscard = document.getElementById("discard");
-const elBinder = document.getElementById("binder");
-const btnPrimary = document.getElementById("btnPrimary");
-const btnAuto = document.getElementById("btnAuto");
-const btnRotate = document.getElementById("btnRotate");
-const boxesGrid = document.getElementById("boxesGrid");
-const goBoxes = document.getElementById("goBoxes");
-const openedEl = document.getElementById("opened");
-
-const STACK_SELECTOR = ".pack-stage__stack";
-
-/* -------------------------------------------------------------------------- */
-/* Persistence                                                                 */
-/* -------------------------------------------------------------------------- */
-
-const LS_STATE = "cb_stack_state_v3";
-
-function ensureBinderDefaults(value) {
-  const result = {};
-  if (value && typeof value === "object") {
-    Object.entries(value).forEach(([key, count]) => {
-      if (Number.isFinite(count) && count >= 0) {
-        result[key] = Math.floor(count);
-      }
-    });
-  }
-  RARITIES.forEach((rarity) => {
-    if (!Number.isFinite(result[rarity.key])) {
-      result[rarity.key] = 0;
-    }
-  });
-  return result;
-}
-
-function loadPersistedState() {
+function loadSavedBinder() {
   try {
-    const raw = localStorage.getItem(LS_STATE);
-    if (!raw) {
-      return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
-    }
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
+    if (parsed && typeof parsed === "object" && parsed.binder) {
+      return parsed.binder;
     }
-    const boxKey = typeof parsed.boxKey === "string" && BOXES[parsed.boxKey] ? parsed.boxKey : state.currentBox.key;
-    return {
-      binder: ensureBinderDefaults(parsed.binder),
-      opened: Number.isFinite(parsed.opened) && parsed.opened >= 0 ? parsed.opened : 0,
-      boxKey
-    };
   } catch (error) {
-    console.warn("Failed to read saved state", error);
-    return { binder: ensureBinderDefaults({}), opened: 0, boxKey: state.currentBox.key };
+    console.warn("Failed to load binder", error);
   }
+  return {};
 }
 
-function savePersistedState() {
+function saveBinder() {
   try {
     const payload = {
       binder: state.binder,
-      opened: state.opened,
-      boxKey: state.currentBox && state.currentBox.key ? state.currentBox.key : null
+      expansion: state.expansion.key
     };
-    localStorage.setItem(LS_STATE, JSON.stringify(payload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
-    console.warn("Failed to save state", error);
+    console.warn("Failed to save binder", error);
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Utilities                                                                   */
-/* -------------------------------------------------------------------------- */
-
-function sampleFromWeights(weights) {
-  const entries = Object.entries(weights);
-  const total = entries.reduce((acc, [, weight]) => acc + weight, 0);
-  let r = Math.random() * total;
-  for (const [key, weight] of entries) {
-    if (r < weight) return key;
-    r -= weight;
-  }
-  return entries[0][0];
+function countUniqueCards(binder) {
+  return Object.keys(binder || {}).length;
 }
 
-function makeCardName(rarityKey) {
-  const adjPool = ["3d", "4d", "1s", "2s", "3s", "cr"].includes(rarityKey) ? NAME_ADJ_RARE : NAME_ADJ_COMMON;
-  const adj = adjPool[Math.floor(Math.random() * adjPool.length)];
-  const noun = NAME_NOUNS[Math.floor(Math.random() * NAME_NOUNS.length)];
-  return `${adj} ${noun}`;
-}
-
-function topTierLabel(box) {
-  const slot = box.slots[box.slots.length - 1];
-  const options = Object.keys(slot.weights);
-  const order = ["1d", "2d", "3d", "4d", "1s", "2s", "3s", "cr"];
-  options.sort((a, b) => order.indexOf(a) - order.indexOf(b));
-  const key = options[options.length - 1];
-  return RAR_INDEX[key].label;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Card rotation helpers                                                       */
-/* -------------------------------------------------------------------------- */
-
-function resetCardRotationState() {
-  Object.assign(state.cardRotation, createCardRotationState());
-}
-
-function rotationIsActive() {
-  return Math.abs(state.cardRotation.angleX) > 0.01 || Math.abs(state.cardRotation.angleY) > 0.01;
-}
-
-function clampRotationValue(value) {
-  return Math.max(-CARD_ROTATION_LIMIT, Math.min(CARD_ROTATION_LIMIT, value));
-}
-
-function applyRotationToCard(card, mode = "instant") {
-  if (!card) return;
-
-  if (mode === "drag") {
-    card.style.transition = "transform 0s, box-shadow 0.32s ease, filter 0.32s ease";
-  } else if (mode === "smooth") {
-    card.style.transition = "transform 0.22s ease-out, box-shadow 0.32s ease, filter 0.32s ease";
-  } else {
-    card.style.transition = "";
-  }
-
-  const { angleX, angleY } = state.cardRotation;
-  card.style.setProperty("--tilt-x", `${angleX}deg`);
-  card.style.setProperty("--tilt-y", `${angleY}deg`);
-
-  if (mode === "smooth") {
-    window.setTimeout(() => {
-      if (!state.cardRotation.dragging && card.isConnected && card === getTopCard()) {
-        card.style.transition = "";
-      }
-    }, CARD_ROTATION_RESET_DURATION);
-  }
-}
-
-function setCardRotationAngles(angleX, angleY, mode = "instant") {
-  const clampedX = clampRotationValue(angleX);
-  const clampedY = clampRotationValue(angleY);
-  if (clampedX === state.cardRotation.angleX && clampedY === state.cardRotation.angleY) return;
-
-  state.cardRotation.angleX = clampedX;
-  state.cardRotation.angleY = clampedY;
-  if (!state.cardRotation.dragging) {
-    state.cardRotation.baseAngleX = clampedX;
-    state.cardRotation.baseAngleY = clampedY;
-  }
-
-  const card = getTopCard();
-  applyRotationToCard(card, mode);
-}
-
-function resetTopCardRotation({ animate = false } = {}) {
-  const card = getTopCard();
-  const shouldAnimate = animate && rotationIsActive();
-  resetCardRotationState();
-  if (card) {
-    applyRotationToCard(card, shouldAnimate ? "smooth" : "instant");
-  }
-}
-
-function nudgeCardRotation(deltaX, deltaY) {
-  const card = getTopCard();
-  if (!card) return;
-  if (btnRotate.disabled) return;
-  if (!state.pack) return;
-  setCardRotationAngles(state.cardRotation.angleX + deltaX, state.cardRotation.angleY + deltaY, "smooth");
-}
-
-function handleCardPointerDown(event, card) {
-  if (!state.pack) return;
-  if (card !== getTopCard()) return;
-  if (btnRotate.disabled) return;
-  if (event.pointerType === "mouse" && event.button !== 0) return;
-
-  state.cardRotation.dragging = true;
-  state.cardRotation.pointerId = event.pointerId;
-  state.cardRotation.originX = event.clientX;
-  state.cardRotation.originY = event.clientY;
-  state.cardRotation.baseAngleX = state.cardRotation.angleX;
-  state.cardRotation.baseAngleY = state.cardRotation.angleY;
-
-  if (card.setPointerCapture) {
-    card.setPointerCapture(event.pointerId);
-  }
-  applyRotationToCard(card, "drag");
-  event.preventDefault();
-}
-
-function handleCardPointerMove(event, card) {
-  if (!state.cardRotation.dragging) return;
-  if (state.cardRotation.pointerId !== event.pointerId) return;
-  if (btnRotate.disabled) return;
-  if (!state.pack) return;
-
-  const deltaX = event.clientX - state.cardRotation.originX;
-  const deltaY = event.clientY - state.cardRotation.originY;
-  const nextAngleX = state.cardRotation.baseAngleX - deltaY * CARD_ROTATION_SENSITIVITY;
-  const nextAngleY = state.cardRotation.baseAngleY + deltaX * CARD_ROTATION_SENSITIVITY;
-  setCardRotationAngles(nextAngleX, nextAngleY, "drag");
-}
-
-function endCardPointerInteraction(card) {
-  state.cardRotation.dragging = false;
-  state.cardRotation.pointerId = null;
-  state.cardRotation.originX = 0;
-  state.cardRotation.originY = 0;
-  state.cardRotation.baseAngleX = state.cardRotation.angleX;
-  state.cardRotation.baseAngleY = state.cardRotation.angleY;
-  card.style.transition = "";
-}
-
-function handleCardPointerUp(event, card) {
-  if (state.cardRotation.pointerId !== event.pointerId) return;
-  if (card.hasPointerCapture && card.hasPointerCapture(event.pointerId) && card.releasePointerCapture) {
-    card.releasePointerCapture(event.pointerId);
-  }
-  endCardPointerInteraction(card);
-}
-
-function handleCardPointerCancel(event, card) {
-  if (state.cardRotation.pointerId !== event.pointerId) return;
-  if (card.hasPointerCapture && card.hasPointerCapture(event.pointerId) && card.releasePointerCapture) {
-    card.releasePointerCapture(event.pointerId);
-  }
-  endCardPointerInteraction(card);
-}
-
-function ensurePacksTabEnabled() {
-  const packsTab = document.querySelector('.tab[data-page="packs"]');
-  if (packsTab) {
-    packsTab.disabled = false;
-  }
-}
-
-function getTopCard() {
-  const cards = [...elArea.querySelectorAll(".card")];
-  return cards.length ? cards[cards.length - 1] : null;
-}
-
-function updatePrimary(label, disabled) {
-  btnPrimary.textContent = label;
-  btnPrimary.disabled = Boolean(disabled);
-}
-
-function updateRotateControl(enabled) {
-  btnRotate.disabled = !enabled;
-  if (!enabled) {
-    resetTopCardRotation();
-  }
-}
-
-function hideSummary() {
-  elSummary.dataset.empty = "true";
-  elSummary.innerHTML = "";
-}
-
-/* -------------------------------------------------------------------------- */
-/* Binder                                                                      */
-/* -------------------------------------------------------------------------- */
-
-function renderBinder() {
-  elBinder.innerHTML = "";
-  const grid = document.createElement("div");
-  grid.className = "binder-grid";
-  RARITIES.slice()
-    .reverse()
-    .forEach((rarity) => {
-      const cell = document.createElement("div");
-      cell.className = "thumb";
-      cell.innerHTML = `
-        <div class="thumb-icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
-        <div class="thumb-count">${state.binder[rarity.key]}</div>
-      `;
-      grid.appendChild(cell);
-    });
-  elBinder.appendChild(grid);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Boxes                                                                       */
-/* -------------------------------------------------------------------------- */
-
-function selectBoxHelper(key, { animate = false, focus = false, open = false } = {}) {
-  if (!key) return null;
-  const card = boxesGrid.querySelector(`.boxCard[data-key="${key}"]`);
-  boxesGrid.querySelectorAll(".boxCard").forEach((node) => {
-    const isSelected = node === card;
-    node.classList.toggle("selected", isSelected);
-    node.setAttribute("aria-pressed", isSelected ? "true" : "false");
-  });
-
-  if (!card) return null;
-
-  setBox(key);
-
-  if (animate) {
-    animateBoxSelection(card);
-  }
-
-  if (focus) {
-    window.setTimeout(() => card.focus(), 20);
-  }
-
-  if (open) {
-    activate("packs");
-    spawnCenterBox();
-  }
-
-  return card;
-}
-
-function renderBoxes() {
-  boxesGrid.innerHTML = "";
-  Object.values(BOXES).forEach((box) => {
-    const card = document.createElement("button");
-    card.className = "boxCard";
-    card.type = "button";
-    card.dataset.key = box.key;
-    card.setAttribute("aria-pressed", "false");
-    card.innerHTML = `
-      <div class="boxTop"><div class="boxEmoji" aria-hidden="true">${box.emoji}</div></div>
-      <div class="boxTitle">${box.title}</div>
-      <p class="boxMeta">${box.desc}</p>
-      <div class="boxChips">
-        <span class="chip">Slots: ${box.slots.length}</span>
-        <span class="chip">Top: ${topTierLabel(box)}</span>
-      </div>
-    `;
-
-    card.addEventListener("click", () => {
-      selectBoxHelper(box.key, { animate: true, open: true, focus: false });
-    });
-
-    card.addEventListener("keydown", (event) => {
-      const { key } = event;
-      if (key === "Enter" || key === " ") {
-        event.preventDefault();
-        selectBoxHelper(box.key, { animate: true, open: true, focus: false });
-        return;
-      }
-      const cards = [...boxesGrid.querySelectorAll(".boxCard")];
-      const index = cards.indexOf(card);
-      if (index === -1) return;
-      if (key === "ArrowRight" || key === "ArrowDown") {
-        event.preventDefault();
-        const next = cards[(index + 1) % cards.length];
-        if (next) next.focus();
-        return;
-      }
-      if (key === "ArrowLeft" || key === "ArrowUp") {
-        event.preventDefault();
-        const prev = cards[(index - 1 + cards.length) % cards.length];
-        if (prev) prev.focus();
-        return;
-      }
-      if (key === "Home") {
-        event.preventDefault();
-        const first = cards[0];
-        if (first) first.focus();
-        return;
-      }
-      if (key === "End") {
-        event.preventDefault();
-        const last = cards[cards.length - 1];
-        if (last) last.focus();
-      }
-    });
-
-    boxesGrid.appendChild(card);
-  });
-
-  renderBoxes.selectBox = selectBoxHelper;
-  return selectBoxHelper;
-}
-
-function animateBoxSelection(card) {
-  if (prefersReducedMotion) return;
-  card.classList.add("selected");
-  window.setTimeout(() => card.classList.remove("selected"), 420);
-}
-
-function setBox(key) {
-  state.currentBox = BOXES[key] || BOXES.standard;
-  ensurePacksTabEnabled();
-  if (state.currentPage === "packs") {
-    updateHeader("packs");
-  }
-  savePersistedState();
-}
-
-function focusCurrentBoxCard() {
-  const selected = boxesGrid.querySelector(".boxCard.selected") || boxesGrid.querySelector(".boxCard");
-  if (!selected) return;
-  window.setTimeout(() => selected.focus(), 20);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Pack flow                                                                   */
-/* -------------------------------------------------------------------------- */
-
-function clearBoard() {
-  elArea.classList.remove("breaking");
-  const stack = getStackElement();
-  if (stack) stack.remove();
-  const boxwrap = elArea.querySelector(".pack-stage__boxwrap");
-  if (boxwrap) boxwrap.remove();
-  elArea.querySelectorAll(".card, .cereal-box").forEach((node) => node.remove());
-  elProgress.innerHTML = "";
-  hideSummary();
-  updateRotateControl(false);
-}
-
-function buildDots() {
-  elProgress.innerHTML = "";
-  for (let i = 0; i < state.currentBox.slots.length; i += 1) {
-    const dot = document.createElement("div");
-    dot.className = "dot";
-    dot.style.animationDelay = `${i * 60}ms`;
-    elProgress.appendChild(dot);
-  }
-}
-
-function markProgress(idx) {
-  const dots = [...elProgress.children];
-  dots.forEach((dot, index) => {
-    dot.classList.toggle("on", index <= idx);
-  });
-}
-
-function resetDiscardShelf() {
-  if (!elDiscard) return;
-  elDiscard.innerHTML = "";
-  elDiscard.dataset.empty = "true";
-}
-
-function addDiscardCard(result) {
-  if (!elDiscard) return;
-  const rarity = RAR_INDEX[result.key];
-  const card = document.createElement("div");
-  card.className = `discard-card ${rarity.cls}`;
-  card.setAttribute("role", "listitem");
-  card.innerHTML = `
-    <div class="rarity">${rarity.label}</div>
-    <div class="icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
-    <div class="name">${result.name}</div>
-  `;
-  elDiscard.dataset.empty = "false";
-  elDiscard.prepend(card);
-  const max = 6;
-  while (elDiscard.children.length > max) {
-    elDiscard.lastElementChild.remove();
-  }
-}
-
-function animateCardToDiscard(card) {
-  if (!card) return;
-  if (prefersReducedMotion) {
-    card.style.opacity = "0";
-    return;
-  }
-  const discardRect = elDiscard ? elDiscard.getBoundingClientRect() : null;
-  const cardRect = card.getBoundingClientRect();
-  let translateX = elArea.clientWidth * 0.35;
-  let translateY = -20;
-  let rotate = 6;
-  if (discardRect) {
-    const targetX = discardRect.left + discardRect.width / 2;
-    const targetY = discardRect.top + Math.min(discardRect.height, 240) * 0.35;
-    const currentX = cardRect.left + cardRect.width / 2;
-    const currentY = cardRect.top + cardRect.height / 2;
-    translateX = targetX - currentX;
-    translateY = targetY - currentY;
-    rotate = -12;
-  }
-  card.style.animation = "none";
-  card.style.setProperty("--tilt-x", "0deg");
-  card.style.setProperty("--tilt-y", "0deg");
-  card.style.transition = `transform ${CARD_REVEAL_MS}ms cubic-bezier(.22,1,.36,1), opacity ${CARD_REVEAL_MS}ms ease`;
-  card.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${rotate}deg) scale(0.8)`;
-  card.style.opacity = "0";
-}
-
-function restackCards() {
-  const cards = [...elArea.querySelectorAll(".card")];
-  const total = cards.length;
-  cards.forEach((node, idx) => {
-    const depth = total - idx - 1;
-    node.style.setProperty("--stack-depth", String(depth));
-    node.style.setProperty("--stack-x", `${depth * STACK_OFFSET_X}px`);
-    node.style.setProperty("--stack-y", `${depth * STACK_OFFSET_Y}px`);
-    node.style.setProperty("--stack-z", `${depth * STACK_OFFSET_Z}px`);
-    node.style.zIndex = String(800 + idx);
-  });
-}
-
-function spawnCenterBox() {
-  clearBoard();
-  state.pulled = [];
-  state.pack = null;
-  resetCardRotationState();
-  resetDiscardShelf();
-  buildDots();
-
-  const stack = document.createElement("div");
-  stack.className = "pack-stage__stack";
-  elArea.appendChild(stack);
-
-  const boxwrap = document.createElement("div");
-  boxwrap.className = "pack-stage__boxwrap";
-
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "cereal-box";
-  button.id = "centerBox";
-  button.innerHTML = `
-    <span class="visually-hidden">Break ${state.currentBox.title}</span>
-    <div class="box-shell" aria-hidden="true">
-      <div class="box-lid"></div>
-      <div class="box-brand">Cereal Lab</div>
-      <div class="box-name">${state.currentBox.title}</div>
-      <div class="box-count">${state.currentBox.slots.length} cards inside</div>
-      <div class="box-window">
-        <div class="box-stack">
-          <span class="box-card" style="--i: 0"></span>
-          <span class="box-card" style="--i: 1"></span>
-          <span class="box-card" style="--i: 2"></span>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const triggerBreak = () => {
-    button.disabled = true;
-    elArea.classList.add("breaking");
-    window.setTimeout(() => {
-      boxwrap.remove();
-      elArea.classList.remove("breaking");
-      buildPack();
-    }, BOX_BREAK_MS);
-  };
-
-  button.addEventListener("click", () => {
-    triggerBreak();
-  });
-
-  button.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      triggerBreak();
+function initExpansionPicker() {
+  expansionSelect.innerHTML = EXPANSIONS.map((set) => `<option value="${set.key}">${set.name}</option>`).join("");
+  expansionSelect.value = state.expansion.key;
+  expansionSelect.addEventListener("change", (event) => {
+    const next = EXPANSIONS.find((set) => set.key === event.target.value);
+    if (!next) return;
+    state.expansion = next;
+    if (!state.isPackOpen) {
+      renderPackPlaceholder();
     }
   });
+}
 
-  boxwrap.appendChild(button);
-  elArea.appendChild(boxwrap);
-  updatePrimary("Break Box", false);
-  updateRotateControl(false);
-  window.setTimeout(() => button.focus(), 20);
+function renderPackPlaceholder() {
+  packDisplay.className = "breaker__pack placeholder";
+  packDisplay.textContent = "Awaiting summoning";
+  packDisplay.removeAttribute("aria-hidden");
+  packDisplay.style.removeProperty("background");
+  cardStack.replaceChildren();
+  cardStack.dataset.state = "waiting";
+}
+
+function drawRarity() {
+  const roll = Math.random();
+  let cumulative = 0;
+  for (const rarity of RARITIES) {
+    cumulative += rarity.odds;
+    if (roll <= cumulative) {
+      return rarity.key;
+    }
+  }
+  return "common";
+}
+
+function pickCard(set, rarity) {
+  const pool = set.cards[rarity];
+  if (!pool || pool.length === 0) {
+    return {
+      name: `${rarity.toUpperCase()} Placeholder`,
+      flavour: "A mysterious card yet to be illustrated."
+    };
+  }
+  const name = pool[Math.floor(Math.random() * pool.length)];
+  return {
+    name,
+    flavour: getFlavourText(rarity, set),
+    rarity
+  };
+}
+
+function getFlavourText(rarity, set) {
+  const base = {
+    common: [
+      "A familiar friend from the neighborhood league.",
+      "Training partner for every rookie handler.",
+      "Smells faintly of cardboard stardust."
+    ],
+    uncommon: [
+      "Carries a faint hum of untapped potential.",
+      "Glows under arcade lights and moonbeams alike.",
+      "Rumored to appear only on clear nights."
+    ],
+    rare: [
+      "Crowds gather when this one flashes its crest.",
+      "Sought after in every vintage trade meet.",
+      "Legends whisper about its decisive victories."
+    ],
+    ultra: [
+      "Every flip reshapes the local meta for weeks.",
+      "Foil so bright it leaves afterimages.",
+      "Collectors have crossed oceans for this shine."
+    ],
+    secret: [
+      "You were never guaranteed to see this in your lifetime.",
+      "Rumors said the print run was myth. They're wrong now.",
+      "When it appears, the room stops breathing."
+    ]
+  };
+  const options = base[rarity] || ["The card resonates with unseen power."];
+  return options[Math.floor(Math.random() * options.length)];
 }
 
 function buildPack() {
-  const results = state.currentBox.slots.map((slot) => {
-    const key = sampleFromWeights(slot.weights);
-    return { key, name: makeCardName(key) };
+  const count = getRandomInt(PACK_SIZE_RANGE[0], PACK_SIZE_RANGE[1]);
+  const cards = [];
+  for (let i = 0; i < count; i++) {
+    const rarity = drawRarity();
+    const card = pickCard(state.expansion, rarity);
+    cards.push({ ...card, id: `${state.expansion.key}-${Date.now()}-${i}-${Math.random().toString(16).slice(2, 8)}` });
+  }
+  return cards;
+}
+
+function getRandomInt(min, max) {
+  const lower = Math.ceil(min);
+  const upper = Math.floor(max);
+  return Math.floor(Math.random() * (upper - lower + 1)) + lower;
+}
+
+function setActivePage(key) {
+  pages.forEach((page) => page.classList.toggle("is-active", page.id === `page-${key}`));
+  tabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.page === key));
+}
+
+tabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    setActivePage(tab.dataset.page);
   });
+});
 
-  state.pack = { results, index: 0 };
-  const stack = getStackElement() || (() => {
-    const created = document.createElement("div");
-    created.className = "pack-stage__stack";
-    elArea.appendChild(created);
-    return created;
-  })();
-  stack.querySelectorAll(".card").forEach((node) => node.remove());
-
-  results.forEach((result, index) => {
-    const card = createCardElement(result, index, results.length);
-    elArea.appendChild(card);
-    if (!prefersReducedMotion) {
-      requestAnimationFrame(() => {
-        card.classList.add("card-enter--show");
-        window.setTimeout(() => {
-          card.classList.remove("card-enter", "card-enter--show");
-        }, CARD_REVEAL_MS + 120);
-      });
-    } else {
-      card.classList.remove("card-enter");
-    }
+function setupPackButton() {
+  openPackBtn.addEventListener("click", () => {
+    if (state.isPackOpen) return;
+    state.pack = buildPack();
+    state.revealCount = 0;
+    state.newCount = 0;
+    state.duplicateCount = 0;
+    state.isPackOpen = true;
+    openPackBtn.disabled = true;
+    openPackBtn.textContent = "Pack ready — flip the stack";
+    summaryList.replaceChildren();
+    summaryRevealed.textContent = "0";
+    summaryNew.textContent = "0";
+    summaryDupes.textContent = "0";
+    spawnPack();
   });
-
-  restackCards({ immediate: true });
-  markProgress(-1);
-  updatePrimary("Collect Top Card", false);
-  updateRotateControl(true);
-  resetTopCardRotation();
-  window.setTimeout(() => {
-    const topCard = getTopCard();
-    if (topCard) topCard.focus();
-  }, 60);
 }
 
-function createCardElement(result, index, total) {
-  const rarity = RAR_INDEX[result.key];
-  const card = document.createElement("div");
-  card.className = `card ${rarity.cls} card-enter`;
-  card.dataset.index = String(index);
-  card.style.zIndex = String(800 + index);
-  card.style.touchAction = "none";
-  const depth = total - index - 1;
-  card.style.setProperty("--stack-depth", String(depth));
-  card.style.setProperty("--stack-x", `${depth * STACK_OFFSET_X}px`);
-  card.style.setProperty("--stack-y", `${depth * STACK_OFFSET_Y}px`);
-  card.style.setProperty("--stack-z", `${depth * STACK_OFFSET_Z}px`);
-  card.style.setProperty("--tilt-x", "0deg");
-  card.style.setProperty("--tilt-y", "0deg");
-  card.innerHTML = `
-    <div class="ribbon">${rarity.label}</div>
-    <div class="card-icon">${rarity.icon === "👑" ? "👑" : rarity.icon.repeat(rarity.repeat)}</div>
-    <div class="name">${result.name}</div>
-  `;
-  card.addEventListener("click", () => handleCardClick(card, result));
-  card.addEventListener("keydown", (event) => {
-    if ((event.key === "Enter" || event.key === " ") && card === getTopCard()) {
-      event.preventDefault();
-      handleCardClick(card, result);
-      return;
-    }
-    if (card !== getTopCard()) return;
-    const key = event.key;
-    if (key === "ArrowUp" || key === "w" || key === "W") {
-      event.preventDefault();
-      nudgeCardRotation(CARD_ROTATION_KEY_STEP, 0);
-      return;
-    }
-    if (key === "ArrowDown" || key === "s" || key === "S") {
-      event.preventDefault();
-      nudgeCardRotation(-CARD_ROTATION_KEY_STEP, 0);
-      return;
-    }
-    if (key === "ArrowLeft" || key === "a" || key === "A") {
-      event.preventDefault();
-      nudgeCardRotation(0, -CARD_ROTATION_KEY_STEP);
-      return;
-    }
-    if (key === "ArrowRight" || key === "d" || key === "D") {
-      event.preventDefault();
-      nudgeCardRotation(0, CARD_ROTATION_KEY_STEP);
-    }
+function spawnPack() {
+  packDisplay.className = "breaker__pack is-floating";
+  packDisplay.innerHTML = `<span class="pack-title">${state.expansion.name}</span><span class="pack-tag">${state.expansion.tagline}</span>`;
+  packDisplay.style.background = `linear-gradient(160deg, ${state.expansion.palette[0]}, ${state.expansion.palette[1]})`;
+  packDisplay.dataset.tagline = state.expansion.tagline;
+  packDisplay.setAttribute("role", "button");
+  packDisplay.tabIndex = 0;
+  packDisplay.addEventListener("click", openPack, { once: true });
+  packDisplay.addEventListener("keydown", packKeyHandler);
+}
+
+function openPack() {
+  playPackTear();
+  packDisplay.classList.add("is-open");
+  packDisplay.setAttribute("aria-hidden", "true");
+  packDisplay.removeEventListener("click", openPack);
+  packDisplay.removeAttribute("role");
+  packDisplay.removeAttribute("tabindex");
+  packDisplay.removeEventListener("keydown", packKeyHandler);
+  setTimeout(() => {
+    packDisplay.textContent = "";
+    renderCardStack();
+  }, prefersReducedMotion ? 0 : 600);
+}
+
+function packKeyHandler(event) {
+  if (event.key === " " || event.key === "Enter") {
+    event.preventDefault();
+    openPack();
+  }
+}
+
+function renderCardStack() {
+  cardStack.replaceChildren();
+  cardStack.dataset.state = "revealing";
+  const total = state.pack.length;
+  const suspenseThreshold = Math.max(total - SUSPENSE_CARD_COUNT, 0);
+  state.pack.forEach((card, index) => {
+    const element = createCardElement(card, index >= suspenseThreshold, index);
+    cardStack.appendChild(element);
   });
-  card.addEventListener("pointerdown", (event) => handleCardPointerDown(event, card));
-  card.addEventListener("pointermove", (event) => handleCardPointerMove(event, card));
-  card.addEventListener("pointerup", (event) => handleCardPointerUp(event, card));
-  card.addEventListener("pointercancel", (event) => handleCardPointerCancel(event, card));
-  card.addEventListener("lostpointercapture", (event) => handleCardPointerCancel(event, card));
-  card.tabIndex = 0;
-  return card;
 }
 
-function handleCardClick(card, result) {
-  if (!state.pack) return;
-  if (card.dataset.revealed === "1") return;
-  const topCard = getTopCard();
-  if (topCard && topCard !== card) return;
-
-  if (rotationIsActive()) {
-    resetTopCardRotation();
+function createCardElement(card, isSuspense, index) {
+  const wrapper = document.createElement("button");
+  wrapper.className = "card";
+  wrapper.type = "button";
+  wrapper.dataset.rarity = card.rarity;
+  wrapper.dataset.state = "sealed";
+  wrapper.style.setProperty("--offset", `${index}`);
+  wrapper.style.zIndex = String(200 - index);
+  if (isSuspense) {
+    wrapper.dataset.suspense = "true";
   }
-  card.dataset.revealed = "1";
-  state.binder[result.key] = (state.binder[result.key] || 0) + 1;
-  state.pulled.push({ key: result.key, name: result.name });
+  wrapper.setAttribute("aria-label", `${card.name}, ${card.rarity} rarity`);
 
-  animateCardToDiscard(card);
+  const inner = document.createElement("div");
+  inner.className = "card__inner";
 
-  window.setTimeout(() => {
-    addDiscardCard(result);
-    card.remove();
-    restackCards();
-    if (!state.pack) return;
-    state.pack.index += 1;
-    markProgress(state.pack.index - 1);
-    const next = getTopCard();
-    if (next) {
-      updateRotateControl(true);
-      window.setTimeout(() => {
-        next.focus();
-      }, 40);
-    } else {
-      updateRotateControl(false);
-    }
-    if (state.pack.index >= state.pack.results.length) {
-      finishPack();
-    }
-  }, CARD_REVEAL_MS);
-}
+  const back = document.createElement("div");
+  back.className = "card__face card__back";
+  back.textContent = "Opencereal";
 
-function finishPack() {
-  state.pack = null;
-  state.opened += 1;
-  openedEl.textContent = state.opened;
-  savePersistedState();
-  showSummary();
-  updatePrimary("Open Another", false);
-  updateRotateControl(false);
-  if (state.autoRunning) scheduleAutoStep(AUTO_STEP_MS);
-}
+  const front = document.createElement("div");
+  front.className = "card__face card__front";
 
-function showSummary() {
-  elSummary.innerHTML = "";
-  const heading = document.createElement("h4");
-  heading.textContent = "This Pack";
-  elSummary.appendChild(heading);
+  const rarity = document.createElement("span");
+  rarity.className = "card__rarity";
+  rarity.textContent = card.rarity.toUpperCase();
 
-  const hero = state.pulled.reduce((best, item) => {
-    if (!best) return item;
-    return RARITY_ORDER[item.key] > RARITY_ORDER[best.key] ? item : best;
-  }, null);
-  if (hero) {
-    const rarity = RAR_INDEX[hero.key];
-    const heroCard = document.createElement("div");
-    heroCard.className = `summary-hero ${rarity.cls}`;
-    heroCard.innerHTML = `
-      <div class="summary-hero-label">Highlight Pull</div>
-      <div class="summary-hero-name">${hero.name}</div>
-      <div class="summary-hero-rarity">${rarity.label}</div>
-    `;
-    elSummary.appendChild(heroCard);
+  const name = document.createElement("h3");
+  name.className = "card__name";
+  name.textContent = card.name;
+
+  const flavour = document.createElement("p");
+  flavour.className = "card__flavour";
+  flavour.textContent = card.flavour;
+
+  const meta = document.createElement("span");
+  meta.className = "card__meta";
+  meta.textContent = `${state.expansion.name}`;
+
+  front.append(rarity, name, flavour, meta);
+  inner.append(back, front);
+  wrapper.append(inner);
+
+  wrapper.addEventListener("click", () => revealCard(wrapper, card));
+
+  if (!prefersReducedMotion) {
+    wrapper.style.transitionDelay = `${Math.min(0.4, 0.05 * Number(wrapper.style.getPropertyValue("--offset")))}s`;
   }
 
-  const list = document.createElement("ul");
-  list.className = "summary-list";
-  state.pulled.forEach((item) => {
-    if (hero && item === hero) return;
-    const rarity = RAR_INDEX[item.key];
-    const li = document.createElement("li");
-    li.className = rarity.cls;
-    li.innerHTML = `
-      <span class="rar">${rarity.label}</span>
-      <span class="name">${item.name}</span>
-    `;
-    list.appendChild(li);
-  });
-  if (list.children.length) {
-    elSummary.appendChild(list);
-  }
-  renderBinder();
+  return wrapper;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Auto collect                                                                */
-/* -------------------------------------------------------------------------- */
+function revealCard(element, card) {
+  if (element.dataset.state === "revealed") return;
+  element.dataset.state = "revealed";
+  cardStack.dataset.state = "revealing";
+  element.classList.remove("is-waiting");
+  playCardFlip();
 
-function scheduleAutoStep(delay = AUTO_STEP_MS) {
-  if (!state.autoRunning) return;
-  if (state.autoTimer) {
-    window.clearTimeout(state.autoTimer);
+  const rarityData = RARITY_MAP[card.rarity];
+  if (rarityData && (card.rarity === "rare" || card.rarity === "ultra" || card.rarity === "secret")) {
+    triggerRareEffect(element);
+    playRareSting();
   }
-  state.autoTimer = window.setTimeout(() => {
-    if (!state.autoRunning) return;
 
-    if (state.currentPage !== "packs") {
-      activate("packs");
-    }
-
-    if (elSummary.dataset.empty !== "true") {
-      hideSummary();
-      spawnCenterBox();
-      scheduleAutoStep(AUTO_STEP_MS);
-      return;
-    }
-
-    const center = document.getElementById("centerBox");
-    if (center) {
-      center.click();
-      scheduleAutoStep(WAIT_AFTER_BREAK_MS);
-      return;
-    }
-
-    const topCard = getTopCard();
-    if (topCard) {
-      topCard.click();
-      scheduleAutoStep(CARD_REVEAL_MS);
-      return;
-    }
-
-    spawnCenterBox();
-    scheduleAutoStep(AUTO_STEP_MS);
-  }, delay);
-}
-
-function startAuto() {
-  state.autoRunning = true;
-  ensurePacksTabEnabled();
-  if (!state.currentBox) {
-    state.currentBox = BOXES.standard;
-  }
-  btnAuto.textContent = "Auto: ON";
-  btnAuto.setAttribute("aria-pressed", "true");
-  activate("packs");
-  scheduleAutoStep(AUTO_STEP_MS);
-}
-
-function stopAuto() {
-  if (!state.autoRunning) return;
-  state.autoRunning = false;
-  btnAuto.textContent = "Auto Collect";
-  btnAuto.setAttribute("aria-pressed", "false");
-  if (state.autoTimer) {
-    window.clearTimeout(state.autoTimer);
-  }
-  state.autoTimer = null;
-}
-
-function toggleAuto() {
-  if (state.autoRunning) {
-    stopAuto();
+  const wasNew = recordCard(card);
+  state.revealCount += 1;
+  if (wasNew) {
+    state.newCount += 1;
   } else {
-    startAuto();
+    state.duplicateCount += 1;
+  }
+
+  updateSummary(card, wasNew);
+  updateInventory();
+
+  if (state.revealCount === state.pack.length) {
+    concludePack();
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Navigation                                                                  */
-/* -------------------------------------------------------------------------- */
-
-function activate(page) {
-  state.currentPage = page;
-  ["home", "boxes", "packs", "binder"].forEach((key) => {
-    const panel = getPage(key);
-    const tab = document.querySelector(`.tab[data-page="${key}"]`);
-    const on = key === page;
-    if (panel) panel.classList.toggle("active", on);
-    if (tab) tab.classList.toggle("active", on);
-  });
-  if (page !== "packs") {
-    stopAuto();
-    updateRotateControl(false);
+function recordCard(card) {
+  if (!state.binder[card.name]) {
+    state.binder[card.name] = { count: 1, rarity: card.rarity, expansion: state.expansion.name };
+    state.totalUniqueCards = countUniqueCards(state.binder);
+    saveBinder();
+    return true;
   }
-  updateHeader(page);
+  state.binder[card.name].count += 1;
+  saveBinder();
+  return false;
 }
 
-function updateHeader(page) {
-  const titles = {
-    home: "Home",
-    boxes: "Boxes",
-    packs: state.currentBox ? state.currentBox.title : "Packs",
-    binder: "Binder"
-  };
-  elTitle.textContent = `Cereal Box — ${titles[page]}`;
-  if (page === "packs" && state.currentBox) {
-    elSubtitle.textContent = `${state.currentBox.slots.length}-card stack • Snap the seal and reveal each pull.`;
-  } else if (page === "boxes") {
-    elSubtitle.textContent = "Pick a box. Each has different slots and odds.";
-  } else if (page === "binder") {
-    elSubtitle.textContent = "Totals by rarity symbol.";
+function updateSummary(card, isNew) {
+  const item = document.createElement("div");
+  item.className = "summary__item";
+  item.dataset.rarity = card.rarity;
+
+  const rarity = document.createElement("span");
+  rarity.className = "summary__rarity";
+  rarity.textContent = `${card.rarity.toUpperCase()}${isNew ? " • NEW" : ""}`;
+
+  const name = document.createElement("h4");
+  name.className = "summary__name";
+  name.textContent = card.name;
+
+  const meta = document.createElement("span");
+  meta.className = "summary__rarity";
+  meta.textContent = state.expansion.name;
+
+  item.append(rarity, name, meta);
+  summaryList.prepend(item);
+
+  summaryRevealed.textContent = String(state.revealCount);
+  summaryNew.textContent = String(state.newCount);
+  summaryDupes.textContent = String(state.duplicateCount);
+}
+
+function concludePack() {
+  state.isPackOpen = false;
+  openPackBtn.disabled = false;
+  openPackBtn.textContent = "Summon Pack";
+  cardStack.dataset.state = "empty";
+  if (!prefersReducedMotion) {
+    setTimeout(() => {
+      renderPackPlaceholder();
+    }, 1400);
   } else {
-    elSubtitle.textContent = "Click a box → stacked cards → click to collect → summary.";
+    renderPackPlaceholder();
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Event wiring                                                                */
-/* -------------------------------------------------------------------------- */
+function updateInventory() {
+  const entries = Object.entries(state.binder);
+  const totalCards = entries.reduce((acc, [, info]) => acc + info.count, 0);
+  const allCards = getAllCardNames();
+  const completion = allCards === 0 ? 0 : Math.round((state.totalUniqueCards / allCards) * 100);
 
-function wireNav() {
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const { page } = tab.dataset;
-      if (tab.disabled) return;
-      activate(page);
-      if (page === "packs" && !elArea.querySelector(".card, #centerBox")) {
-        spawnCenterBox();
-        return;
-      }
-      if (page === "boxes") {
-        focusCurrentBoxCard();
-      }
+  inventoryUnique.textContent = String(state.totalUniqueCards);
+  inventoryTotal.textContent = String(totalCards);
+  inventoryCompletion.textContent = `${completion}%`;
+
+  const fragment = document.createDocumentFragment();
+  entries
+    .filter(([, info]) => state.filter === "all" || info.rarity === state.filter)
+    .sort((a, b) => rarityRank(a[1].rarity) - rarityRank(b[1].rarity) || a[0].localeCompare(b[0]))
+    .forEach(([name, info]) => {
+      const card = document.createElement("div");
+      card.className = "inventory-card";
+      card.dataset.rarity = info.rarity;
+      card.setAttribute("role", "listitem");
+
+      const rarity = document.createElement("span");
+      rarity.className = "inventory-card__rarity";
+      rarity.textContent = info.rarity.toUpperCase();
+
+      const title = document.createElement("h4");
+      title.className = "inventory-card__name";
+      title.textContent = name;
+
+      const meta = document.createElement("span");
+      meta.className = "inventory-card__meta";
+      meta.textContent = info.expansion;
+
+      const count = document.createElement("span");
+      count.className = "inventory-card__count";
+      count.textContent = info.count > 1 ? `x${info.count}` : "Unique";
+
+      card.append(rarity, title, meta, count);
+      fragment.append(card);
     });
-  });
+
+  inventoryGrid.replaceChildren(fragment);
 }
 
-function wireControls() {
-  goBoxes.addEventListener("click", () => {
-    activate("boxes");
-    focusCurrentBoxCard();
-  });
+function getAllCardNames() {
+  return EXPANSIONS.reduce((total, expansion) => {
+    return (
+      total +
+      Object.values(expansion.cards).reduce((acc, pool) => {
+        return acc + (Array.isArray(pool) ? pool.length : 0);
+      }, 0)
+    );
+  }, 0);
+}
 
-  btnPrimary.addEventListener("click", () => {
-    if (elSummary.dataset.empty !== "true") {
-      hideSummary();
-      spawnCenterBox();
-      return;
-    }
-    const centerBox = document.getElementById("centerBox");
-    if (centerBox) {
-      centerBox.click();
-      return;
-    }
-    const topCard = getTopCard();
-    if (topCard) {
-      topCard.click();
-      return;
-    }
-    if (state.pack) {
-      return;
-    }
-    spawnCenterBox();
-  });
+function rarityRank(key) {
+  const order = { common: 0, uncommon: 1, rare: 2, ultra: 3, secret: 4 };
+  return order[key] ?? 0;
+}
 
-  btnAuto.addEventListener("click", () => {
-    toggleAuto();
+inventoryFilters.forEach((filterBtn) => {
+  filterBtn.addEventListener("click", () => {
+    inventoryFilters.forEach((btn) => btn.classList.remove("is-active"));
+    filterBtn.classList.add("is-active");
+    state.filter = filterBtn.dataset.filter;
+    updateInventory();
   });
+});
 
-  btnRotate.addEventListener("click", () => {
-    resetTopCardRotation({ animate: true });
-    const topCard = getTopCard();
-    if (topCard) {
-      topCard.focus();
+function triggerRareEffect(element) {
+  element.animate(
+    [
+      { transform: "scale(1)", boxShadow: "0 0 0 rgba(255, 209, 102, 0)" },
+      { transform: "scale(1.05)", boxShadow: "0 0 40px rgba(255, 209, 102, 0.45)" },
+      { transform: "scale(1)", boxShadow: "0 0 0 rgba(255, 209, 102, 0)" }
+    ],
+    {
+      duration: prefersReducedMotion ? 200 : 900,
+      easing: "cubic-bezier(0.21, 0.62, 0.35, 1)",
+      iterations: 1
     }
-  });
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Audio                                                                       */
+/* -------------------------------------------------------------------------- */
+
+let audioCtx;
+
+function getAudioContext() {
+  if (prefersReducedMotion) return null;
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
+
+function playPackTear() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const duration = 0.4;
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    const progress = i / data.length;
+    data[i] = (Math.random() * 2 - 1) * (1 - progress) * (progress + 0.3);
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.9, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+  source.connect(gain).connect(ctx.destination);
+  source.start();
+}
+
+function playCardFlip() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(240, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.12);
+  gain.gain.setValueAtTime(0.001, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.25);
+}
+
+function playRareSting() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(110, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.4);
+  gain.gain.setValueAtTime(0.001, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.8, ctx.currentTime + 0.1);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.8);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1200, ctx.currentTime);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.9);
 }
 
 /* -------------------------------------------------------------------------- */
 /* Init                                                                         */
 /* -------------------------------------------------------------------------- */
 
-function init() {
-  const saved = loadPersistedState();
-  state.binder = saved.binder;
-  state.opened = saved.opened;
-  openedEl.textContent = state.opened;
-  renderBinder();
-  const selectBox = renderBoxes();
-  wireNav();
-  wireControls();
-  ensurePacksTabEnabled();
-  const defaultBoxKey = saved.boxKey && BOXES[saved.boxKey] ? saved.boxKey : state.currentBox.key;
-  if (typeof selectBox === "function") {
-    selectBox(defaultBoxKey, { focus: false, animate: false });
+function hydrateState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.expansion) {
+      const found = EXPANSIONS.find((set) => set.key === parsed.expansion);
+      if (found) {
+        state.expansion = found;
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to hydrate expansion", error);
   }
-  updatePrimary("Choose a box first", true);
-  updateRotateControl(false);
-  hideSummary();
-  updateHeader("home");
 }
 
-window.addEventListener("DOMContentLoaded", init);
+function init() {
+  hydrateState();
+  initExpansionPicker();
+  setupPackButton();
+  renderPackPlaceholder();
+  updateInventory();
+}
 
+init();
